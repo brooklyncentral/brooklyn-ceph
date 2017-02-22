@@ -1,0 +1,249 @@
+brooklyn.catalog:
+  version: "1.0.0-SNAPSHOT" # BROOKLYN_CEPH_VERSION
+  publish:
+    description: |
+      Ceph is a massively scalable, open source, distributed storage system.
+      It is comprised of an object store, block store, and a distributed file system.
+    license_code: "APACHE-2.0"
+    defaults:
+      rethinkDBIconUrl: &cephIconUrl "https://twitter.com/Ceph/profile_image?size=original"
+  items:
+  - "https://raw.githubusercontent.com/brooklyncentral/common-catalog-utils/master/common/src/main/resources/common/common.bom"
+  - id: ceph-node
+    name: "Ceph Node"
+    description: |
+      A single ceph node
+    itemType: entity
+    iconUrl: *cephIconUrl
+    item:
+      id: ceph-node
+      name: "Ceph Node"
+      type: centos-software-process
+      brooklyn.parameters: &cephNodeParams
+      - name: ceph.release.name
+        label: "ceph.release.name"
+        description: |
+          Ceph release name
+        type: string
+        default: jewel
+      - name: ceph.release.version
+        label: "ceph.release.version"
+        description: |
+          Ceph release version
+        type: string
+        default: "1-1"
+      brooklyn.config:
+        shell.env:
+          ENTITY_ID: $brooklyn:attributeWhenReady("entity.id")
+          CEPH_RELEASE_NAME: $brooklyn:config("ceph.release.name")
+          CEPH_RELEASE_VERSION: $brooklyn:config("ceph.release.version")
+          CEPH_TARGET_DISTRO: el7
+        install.command: |
+          sudo rpm --import 'https://download.ceph.com/keys/release.asc'
+          sudo tee /etc/yum.repos.d/ceph.repo <<-EOF
+          [ceph]
+          name=Ceph packages for \$basearch
+          baseurl=https://download.ceph.com/rpm-${CEPH_RELEASE_NAME}/${CEPH_TARGET_DISTRO}/\$basearch
+          enabled=1
+          priority=2
+          gpgcheck=1
+          gpgkey=https://download.ceph.com/keys/release.asc
+
+          [ceph-noarch]
+          name=Ceph noarch packages
+          baseurl=https://download.ceph.com/rpm-${CEPH_RELEASE_NAME}/${CEPH_TARGET_DISTRO}/noarch
+          enabled=1
+          priority=2
+          gpgcheck=1
+          gpgkey=https://download.ceph.com/keys/release.asc
+
+          [ceph-source]
+          name=Ceph source packages
+          baseurl=https://download.ceph.com/rpm-${CEPH_RELEASE_NAME}/${CEPH_TARGET_DISTRO}/SRPMS
+          enabled=0
+          priority=2
+          gpgcheck=1
+          gpgkey=https://download.ceph.com/keys/release.asc
+          EOF
+          sudo yum update -y
+          sudo yum install -y epel-release augeas wget ntp snappy leveldb gdisk python-argparse gperftools-libs
+          sudo yum install -y ceph
+          sudo usermod -a -G ceph ${USER}
+          sudo usermod -aG wheel ceph
+          sudo wget https://raw.githubusercontent.com/brooklyncentral/brooklyn-rethinkdb/master/resources/rethinkdb/augtool-helper.sh -O /usr/sbin/augtool-helper
+          sudo chmod 751 /usr/sbin/augtool-helper
+          sudo tee /usr/share/augeas/lenses/dist/ceph.aug <<-EOF
+          (* Ceph module for Augeas
+           Author: Pavel Chechetin  <pchechetin@mirantis.com>
+
+           ceph.conf is a standard INI File with whitespaces in the title.
+          *)
+          module Ceph =
+            autoload xfm
+          let comment    = IniFile.comment IniFile.comment_re IniFile.comment_default
+          let sep        = IniFile.sep IniFile.sep_re IniFile.sep_default
+          let entry_re   = /[A-Za-z0-9_.-][A-Za-z0-9 _.-]*[A-Za-z0-9_.-]/
+          let entry      = IniFile.indented_entry entry_re sep comment
+          let title   = IniFile.indented_title IniFile.record_re
+          let record  = IniFile.record title entry
+          let lns     = IniFile.lns record comment
+          let filter = (incl "/etc/ceph/ceph.conf")
+                     . (incl (Sys.getenv("HOME") . "/.ceph/config"))
+          let xfm = transform lns filter
+          EOF
+
+  - id: ceph-monitor-node
+    name: "Ceph Monitor Node"
+    itemType: entity
+    iconUrl: *cephIconUrl
+    item:
+      type: ceph-node
+      name: "Ceph Monitor Node"
+      brooklyn.parameters:
+      - name: ceph.monitor.cluster.name
+        label: "ceph.monitor.cluster.name"
+        description: |
+          Ceph monitor cluster name
+        type: string
+        default: ceph
+      - name: ceph.monitor.hostnames
+        label: "ceph.monitor.hostnames"
+        description: |
+          Ceph monitor hostnames (comma seperated)
+        type: string
+      - name: ceph.monitor.fsid
+        label: "ceph.monitor.fsid"
+        description: |
+          Ceph monitor fsid, unique filesystem identifier (UUID)
+        type: string
+
+      brooklyn.config:
+        shell.env:
+          HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
+          RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
+          CEPH_MON_CLUSTER_NAME: $brooklyn:config("ceph.monitor.cluster.name")
+          CEPH_MON_HOSTNAMES: $brooklyn:config("ceph.monitor.hostnames")
+          CEPH_MON_FSID: $brooklyn:config("ceph.monitor.fsid")
+        customize.command: |
+          if [ -z "${CEPH_MON_FSID}" ]; then
+            CEPH_MON_FSID=$(uuidgen)
+          fi
+          echo "${CEPH_MON_FSID}" > ${RUN_DIR}/ceph-monitor-fsid.txt
+          sudo touch /etc/ceph/ceph.conf
+          sudo augtool-helper -l Ceph -f /etc/ceph/ceph.conf <<-EOF
+          set /files/etc/ceph/ceph.conf/gloabl/fsid ${CEPH_MON_FSID}
+          set /files/etc/ceph/ceph.conf/gloabl/'mon initial members' ${CEPH_MON_HOSTNAMES}
+          set /files/etc/ceph/ceph.conf/gloabl/'mon host' ${CEPH_MON_HOSTNAMES}
+          EOF
+          sudo augtool-helper -l Properties -f /etc/sysconfig/ceph <<-EOF
+            set /files/etc/sysconfig/ceph/CLUSTER ${CEPH_MON_CLUSTER_NAME}
+          EOF
+
+          sudo -u ceph ceph-authtool --create-keyring /tmp/ceph.mon.keyring --gen-key -n mon. --cap mon 'allow *'
+          sudo ceph-authtool --create-keyring /etc/ceph/ceph.client.admin.keyring --gen-key -n client.admin --set-uid=0 --cap mon 'allow *' --cap osd 'allow *' --cap mds 'allow'
+          sudo ceph-authtool /tmp/ceph.mon.keyring --import-keyring /etc/ceph/ceph.client.admin.keyring
+
+          sudo rm -f /tmp/monmap
+          for CEPH_MON_HOSTNAME in  $(echo "${CEPH_MON_HOSTNAMES}" | sed 's/,/ /g'); do
+            if [ ! -f /tmp/monmap ]; then
+              sudo -u ceph monmaptool --create --add ${CEPH_MON_HOSTNAME} ${CEPH_MON_HOSTNAME} --fsid ${CEPH_MON_FSID} /tmp/monmap
+            else
+              sudo -u ceph monmaptool --add ${CEPH_MON_HOSTNAME} ${CEPH_MON_HOSTNAME} --fsid ${CEPH_MON_FSID} /tmp/monmap
+            fi
+          done
+          sudo -u ceph mkdir -p /var/lib/ceph/mon/${CEPH_MON_CLUSTER_NAME}-${HOST_SUBNET_ADDRESS}
+          sudo -u ceph ceph-mon --cluster ${CEPH_MON_CLUSTER_NAME} --mkfs -i ${HOST_SUBNET_ADDRESS} --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
+          sudo -u ceph touch /var/lib/ceph/mon/${CEPH_MON_CLUSTER_NAME}-${HOST_SUBNET_ADDRESS}/done
+        launch.command: |
+          sudo systemctl start ceph-mon@${HOST_SUBNET_ADDRESS}
+        checkRunning.command: |
+          sudo systemctl status ceph-mon@${HOST_SUBNET_ADDRESS}
+
+      brooklyn.initializers:
+      - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
+        brooklyn.config:
+          name: ceph.monitor.fsid
+          description: |
+            TODO
+          targetType: string
+          command: |
+            cat ${RUN_DIR}/ceph-monitor-fsid.txt || exit 1
+
+  - id: ceph-monitor-cluster
+    name: "Ceph Monitor Cluster"
+    itemType: entity
+    iconUrl: *cephIconUrl
+    item:
+      type: cluster
+      name: "Ceph Monitor Cluster"
+      brooklyn.config:
+        cluster.initial.size: 3
+        dynamiccluster.firstmemberspec:
+          $brooklyn:entitySpec:
+            type: ceph-monitor-node
+            id: first-ceph-monitor-node
+            brooklyn.config:
+              shell.env:
+                CEPH_MON_HOSTNAMES: $brooklyn:parent().attributeWhenReady("ceph.monitor.hostnames")
+        dynamiccluster.memberspec:
+          $brooklyn:entitySpec:
+            type: ceph-monitor-node
+            brooklyn.config:
+              shell.env:
+                CEPH_MON_HOSTNAMES: $brooklyn:parent().attributeWhenReady("ceph.monitor.hostnames")
+                CEPH_MON_FSID: $brooklyn:attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+      brooklyn.enrichers:
+        - type: org.apache.brooklyn.enricher.stock.Aggregator
+          brooklyn.config:
+            uniqueTag: ceph-monitor-hostname-aggregator
+            enricher.sourceSensor: $brooklyn:sensor("host.subnet.address")
+            enricher.targetSensor: $brooklyn:sensor("ceph.monitor.hostname.list")
+            enricher.aggregating.fromMembers: true
+            enricher.aggregator.excludeBlank: true
+        - type: org.apache.brooklyn.enricher.stock.Joiner
+          brooklyn.config:
+            uniqueTag: ceph-monitor-hostname-joiner
+            enricher.sourceSensor: $brooklyn:sensor("ceph.monitor.hostname.list")
+            enricher.targetSensor: $brooklyn:sensor("ceph.monitor.hostnames")
+            enricher.joiner.quote: false
+
+
+# TODO ADD RBD
+
+  - id: ceph-mds-node
+    name: "Ceph Metadata Service Node"
+    itemType: entity
+    iconUrl: *cephIconUrl
+    item:
+      type: ceph-node
+      name: "Ceph Metadata Service Node"
+      brooklyn.config:
+        customize.command: |
+          echo "CONFIGURE SOMETHING!"
+        launch.command: |
+          echo "LAUNCH SOMETHING!"
+
+  - id: ceph-osd-node
+    name: "Ceph OSD Node"
+    itemType: entity
+    iconUrl: *cephIconUrl
+    item:
+      type: ceph-node
+      name: "Ceph OSD Node"
+      brooklyn.config:
+        customize.command: |
+          echo "CONFIGURE SOMETHING!"
+        launch.command: |
+          echo "LAUNCH SOMETHING!"
+
+
+
+
+  - id: ceph
+    name: "Ceph"
+    itemType: template
+    iconUrl: *cephIconUrl
+    item:
+      services:
+      - type: ceph-monitor-cluster
+
