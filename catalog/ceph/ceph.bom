@@ -32,7 +32,14 @@ brooklyn.catalog:
           Ceph release version
         type: string
         default: "1-1"
+      - name: ceph.sharedsecuritygroup.create
+        label: "ceph.sharedsecuritygroup.create"
+        description: |
+          Ceph shared security group
+        type: boolean
+        default: true
       brooklyn.config:
+        ceph.monitor.port: 6789
         shell.env:
           ENTITY_ID: $brooklyn:attributeWhenReady("entity.id")
           CEPH_RELEASE_NAME: $brooklyn:config("ceph.release.name")
@@ -65,11 +72,13 @@ brooklyn.catalog:
           gpgcheck=1
           gpgkey=https://download.ceph.com/keys/release.asc
           EOF
+
           sudo yum update -y
           sudo yum install -y epel-release augeas wget ntp snappy leveldb gdisk python-argparse gperftools-libs
           sudo yum install -y ceph
           sudo usermod -a -G ceph ${USER}
           sudo usermod -aG wheel ceph
+
           sudo wget https://raw.githubusercontent.com/brooklyncentral/brooklyn-rethinkdb/master/resources/rethinkdb/augtool-helper.sh -O /usr/sbin/augtool-helper
           sudo chmod 751 /usr/sbin/augtool-helper
           sudo tee /usr/share/augeas/lenses/dist/ceph.aug <<-EOF
@@ -91,6 +100,14 @@ brooklyn.catalog:
                      . (incl (Sys.getenv("HOME") . "/.ceph/config"))
           let xfm = transform lns filter
           EOF
+        provisioning.properties:
+          customizer:
+            $brooklyn:object:
+              type: org.apache.brooklyn.location.jclouds.networking.SharedLocationSecurityGroupCustomizer
+              object.fields:
+                enabled: $brooklyn:config("ceph.sharedsecuritygroup.create")
+                tcpPortRanges:
+                  - "6800-7300"
 
   - id: ceph-monitor-node
     name: "Ceph Monitor Node"
@@ -100,8 +117,8 @@ brooklyn.catalog:
       type: ceph-node
       name: "Ceph Monitor Node"
       brooklyn.parameters:
-      - name: ceph.monitor.cluster.name
-        label: "ceph.monitor.cluster.name"
+      - name: ceph.cluster.name
+        label: "ceph.cluster.name"
         description: |
           Ceph monitor cluster name
         type: string
@@ -116,14 +133,19 @@ brooklyn.catalog:
         description: |
           Ceph monitor fsid, unique filesystem identifier (UUID)
         type: string
-
+      - name: ceph.client.admin.keyring
+        label: "ceph.client.admin.keyring"
+        description: |
+          Ceph admin keyring
+        type: string
       brooklyn.config:
         shell.env:
           HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
           RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
-          CEPH_MON_CLUSTER_NAME: $brooklyn:config("ceph.monitor.cluster.name")
+          CEPH_CLUSTER_NAME: $brooklyn:config("ceph.cluster.name")
           CEPH_MON_HOSTNAMES: $brooklyn:config("ceph.monitor.hostnames")
           CEPH_MON_FSID: $brooklyn:config("ceph.monitor.fsid")
+          CEPH_CLIENT_ADMIN_KEYRING: $brooklyn:config("ceph.client.admin.keyring")
         customize.command: |
           if [ -z "${CEPH_MON_FSID}" ]; then
             CEPH_MON_FSID=$(uuidgen)
@@ -136,12 +158,17 @@ brooklyn.catalog:
           set /files/etc/ceph/ceph.conf/gloabl/'mon host' ${CEPH_MON_HOSTNAMES}
           EOF
           sudo augtool-helper -l Properties -f /etc/sysconfig/ceph <<-EOF
-            set /files/etc/sysconfig/ceph/CLUSTER ${CEPH_MON_CLUSTER_NAME}
+            set /files/etc/sysconfig/ceph/CLUSTER ${CEPH_CLUSTER_NAME}
           EOF
-
+          sudo touch /etc/ceph/ceph.client.admin.keyring
+          if [ -z "${CEPH_CLIENT_ADMIN_KEYRING}" ]; then
+            sudo ceph-authtool --create-keyring /etc/ceph/ceph.client.admin.keyring --gen-key -n client.admin --set-uid=0 --cap mon 'allow *' --cap osd 'allow *' --cap mds 'allow'
+          else
+            echo "${CEPH_CLIENT_ADMIN_KEYRING}" | sudo tee -a /etc/ceph/ceph.client.admin.keyring
+          fi
           sudo -u ceph ceph-authtool --create-keyring /tmp/ceph.mon.keyring --gen-key -n mon. --cap mon 'allow *'
-          sudo ceph-authtool --create-keyring /etc/ceph/ceph.client.admin.keyring --gen-key -n client.admin --set-uid=0 --cap mon 'allow *' --cap osd 'allow *' --cap mds 'allow'
-          sudo ceph-authtool /tmp/ceph.mon.keyring --import-keyring /etc/ceph/ceph.client.admin.keyring
+
+          sudo -u ceph ceph-authtool /tmp/ceph.mon.keyring --import-keyring /etc/ceph/ceph.client.admin.keyring
 
           sudo rm -f /tmp/monmap
           for CEPH_MON_HOSTNAME in  $(echo "${CEPH_MON_HOSTNAMES}" | sed 's/,/ /g'); do
@@ -151,9 +178,9 @@ brooklyn.catalog:
               sudo -u ceph monmaptool --add ${CEPH_MON_HOSTNAME} ${CEPH_MON_HOSTNAME} --fsid ${CEPH_MON_FSID} /tmp/monmap
             fi
           done
-          sudo -u ceph mkdir -p /var/lib/ceph/mon/${CEPH_MON_CLUSTER_NAME}-${HOST_SUBNET_ADDRESS}
-          sudo -u ceph ceph-mon --cluster ${CEPH_MON_CLUSTER_NAME} --mkfs -i ${HOST_SUBNET_ADDRESS} --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
-          sudo -u ceph touch /var/lib/ceph/mon/${CEPH_MON_CLUSTER_NAME}-${HOST_SUBNET_ADDRESS}/done
+          sudo -u ceph mkdir -p /var/lib/ceph/mon/${CEPH_CLUSTER_NAME}-${HOST_SUBNET_ADDRESS}
+          sudo -u ceph ceph-mon --cluster ${CEPH_CLUSTER_NAME} --mkfs -i ${HOST_SUBNET_ADDRESS} --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
+          sudo -u ceph touch /var/lib/ceph/mon/${CEPH_CLUSTER_NAME}-${HOST_SUBNET_ADDRESS}/done
         launch.command: |
           sudo systemctl start ceph-mon@${HOST_SUBNET_ADDRESS}
         checkRunning.command: |
@@ -168,6 +195,14 @@ brooklyn.catalog:
           targetType: string
           command: |
             cat ${RUN_DIR}/ceph-monitor-fsid.txt || exit 1
+      - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
+        brooklyn.config:
+          name: ceph.client.admin.keyring
+          description: |
+            TODO
+          targetType: string
+          command: |
+            cat /etc/ceph/ceph.client.admin.keyring || exit 1
 
   - id: ceph-monitor-cluster
     name: "Ceph Monitor Cluster"
@@ -175,6 +210,7 @@ brooklyn.catalog:
     iconUrl: *cephIconUrl
     item:
       type: cluster
+      id: ceph-monitor-cluster
       name: "Ceph Monitor Cluster"
       brooklyn.config:
         cluster.initial.size: 3
@@ -190,6 +226,7 @@ brooklyn.catalog:
             type: ceph-monitor-node
             brooklyn.config:
               shell.env:
+                CEPH_CLIENT_ADMIN_KEYRING: $brooklyn:attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
                 CEPH_MON_HOSTNAMES: $brooklyn:parent().attributeWhenReady("ceph.monitor.hostnames")
                 CEPH_MON_FSID: $brooklyn:attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
       brooklyn.enrichers:
@@ -207,6 +244,98 @@ brooklyn.catalog:
             enricher.targetSensor: $brooklyn:sensor("ceph.monitor.hostnames")
             enricher.joiner.quote: false
 
+  - id: ceph-osd-node
+    name: "Ceph OSD Node"
+    itemType: entity
+    iconUrl: *cephIconUrl
+    item:
+      type: ceph-node
+      name: "Ceph OSD Node"
+      brooklyn.parameters:
+      - name: ceph.osd.weight
+        label: "ceph.osd.weight"
+        description: |
+          Ceph OSD weight
+        type: double
+        default: 1.0
+      brooklyn.config:
+        shell.env:
+          HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
+          RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
+          CEPH_CLUSTER_NAME: $brooklyn:config("ceph.cluster.name")
+          CEPH_OSD_WEIGHT: $brooklyn:config("ceph.osd.weight")
+#          CEPH_OSD_MOUNT_POINT: /dev/{hdd}
+          CEPH_MON_FSID: $brooklyn:config("ceph.monitor.fsid")
+          CEPH_MON_HOSTNAMES: $brooklyn:config("ceph.monitor.hostnames")
+          CEPH_CLIENT_ADMIN_KEYRING: $brooklyn:config("ceph.client.admin.keyring")
+
+        customize.command: |
+          CEPH_OSD_UUID=$(uuidgen)
+          echo "${CEPH_OSD_UUID}" > ${RUN_DIR}/ceph-osd-uuid.txt
+          sudo touch /etc/ceph/ceph.conf
+          sudo augtool-helper -l Ceph -f /etc/ceph/ceph.conf <<-EOF
+          set /files/etc/ceph/ceph.conf/gloabl/fsid ${CEPH_MON_FSID}
+          set /files/etc/ceph/ceph.conf/global/'mon initial members' ${CEPH_MON_HOSTNAMES}
+          set /files/etc/ceph/ceph.conf/global/'mon host' ${CEPH_MON_HOSTNAMES}
+          EOF
+          sudo touch /etc/ceph/ceph.client.admin.keyring
+          if [ -z "${CEPH_CLIENT_ADMIN_KEYRING}" ]; then
+            >&2 echo "Ceph client admin keyring not supplied but is required"
+            exit 1
+          else
+            echo "${CEPH_CLIENT_ADMIN_KEYRING}" | sudo tee -a /etc/ceph/ceph.client.admin.keyring
+          fi
+
+          CEPH_OSD_NUMBER=$(sudo -u ceph ceph osd create ${CEPH_OSD_UUID})
+          echo "${CEPH_OSD_NUMBER}" > ${RUN_DIR}/ceph-osd-number.txt
+
+          sudo -u ceph mkdir -p /var/lib/ceph/osd/${CEPH_CLUSTER_NAME}-${CEPH_OSD_NUMBER}
+          if [ ! -z "${CEPH_OSD_MOUNT_POINT}" ]; then
+            sudo mount -o user_xattr ${CEPH_OSD_MOUNT_POINT} /var/lib/ceph/osd/${CEPH_CLUSTER_NAME}-${CEPH_OSD_NUMBER}
+          fi
+          sudo -u ceph ceph-osd -i ${CEPH_OSD_NUMBER} --mkfs --mkkey --osd-uuid ${CEPH_OSD_UUID}
+          sudo -u ceph ceph auth add osd.${CEPH_OSD_NUMBER} osd 'allow *' mon 'allow profile osd' -i /var/lib/ceph/osd/${CEPH_CLUSTER_NAME}-${CEPH_OSD_NUMBER}/keyring
+
+          for CEPH_MON_HOSTNAME in $(echo "${CEPH_MON_HOSTNAMES}" | sed 's/,/ /g'); do
+          	{ sudo -u ceph ceph --cluster ${CEPH_CLUSTER_NAME} osd crush add-bucket ${CEPH_MON_HOSTNAME} host; break; } || { continue; }
+          done
+          if [ "$?" == "0" ]; then
+            >&2 echo "Failed to add bucket to crush map"
+            exit 1
+          fi
+
+          for CEPH_MON_HOSTNAME in $(echo "${CEPH_MON_HOSTNAMES}" | sed 's/,/ /g'); do
+            { sudo -u ceph ceph osd crush move ${CEPH_MON_HOSTNAME} root=default; break; } || { continue; }
+          done
+          if [ "$?" == "0" ]; then
+            >&2 echo "Failed to move OSD into crush map"
+            exit 1
+          fi
+
+          for CEPH_MON_HOSTNAME in $(echo "${CEPH_MON_HOSTNAMES}" | sed 's/,/ /g'); do
+            { sudo -u ceph ceph --cluster ${CEPH_CLUSTER_NAME} osd crush add "osd.${CEPH_OSD_NUMBER}" ${CEPH_OSD_WEIGHT} host=${CEPH_MON_HOSTNAME}; break; } || { continue; }
+          done
+          if [ "$?" == "0" ]; then
+            >&2 echo "Failed to add crush map to cluster"
+            exit 1
+          fi
+        launch.command: |
+          sudo systemctl start ceph-osd@$(cat ${RUN_DIR}/ceph-osd-number.txt)
+        checkRunning.command: |
+          sudo systemctl status ceph-osd@$(cat ${RUN_DIR}/ceph-osd-number.txt)
+
+  - id: ceph-osd-cluster
+    name: "Ceph OSD Cluster"
+    itemType: entity
+    iconUrl: *cephIconUrl
+    item:
+      type: cluster
+      name: "Ceph OSD Cluster"
+      brooklyn.config:
+        cluster.initial.size: 3
+        dynamiccluster.memberspec:
+          $brooklyn:entitySpec:
+            type: ceph-monitor-node
 
 # TODO ADD RBD
 
@@ -223,21 +352,6 @@ brooklyn.catalog:
         launch.command: |
           echo "LAUNCH SOMETHING!"
 
-  - id: ceph-osd-node
-    name: "Ceph OSD Node"
-    itemType: entity
-    iconUrl: *cephIconUrl
-    item:
-      type: ceph-node
-      name: "Ceph OSD Node"
-      brooklyn.config:
-        customize.command: |
-          echo "CONFIGURE SOMETHING!"
-        launch.command: |
-          echo "LAUNCH SOMETHING!"
-
-
-
 
   - id: ceph
     name: "Ceph"
@@ -246,4 +360,9 @@ brooklyn.catalog:
     item:
       services:
       - type: ceph-monitor-cluster
-
+      - type: ceph-osd-cluster
+        brooklyn.config:
+          ceph.monitor.fsid: $brooklyn:component("sibling","ceph-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+          ceph.client.admin.keyring: $brooklyn:component("sibling","ceph-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+          ceph.monitor.hostnames: $brooklyn:component("sibling","ceph-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")
+          ceph.cluster.name: $brooklyn:component("sibling","ceph-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
