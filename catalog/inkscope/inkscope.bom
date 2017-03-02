@@ -1,0 +1,148 @@
+brooklyn.catalog:
+  version: "1.0.0-SNAPSHOT" # BROOKLYN_CEPH_VERSION
+  publish:
+    description: |
+      Ceph Inkscope is a management and monitoring service for Ceph.
+    license_code: "APACHE-2.0"
+    defaults:
+      cephIconUrl: &cephIconUrl "https://twitter.com/Ceph/profile_image?size=original"
+  items:
+  - id: ceph-inkscope
+    name: "Ceph Inkscope Node"
+    description: |
+      Ceph Inkscope is a management and monitoring service for Ceph.
+    itemType: entity
+    iconUrl: "https://twitter.com/Ceph/profile_image?size=original"
+    item:
+      type: ceph-node
+      name: "Ceph Inkscope Node"
+      
+      brooklyn.parameters:
+      - name: calamari.server.download.url
+        label: "calamari.server.download.url"
+        description: |
+          Calamari server download URL
+        type: string
+        #default: http://download.ceph.com/calamari/1.3.1/ubuntu/trusty/pool/main/c/calamari/calamari-server_1.3.1.1-1trusty_amd64.deb
+        default: https://github.com/ksingh7/ceph-calamari-packages/raw/master/CentOS-el7/calamari-server-1.3.0.1-63_g11f74e4.el7.centos.x86_64.rpm
+      - name: calamari.clients.download.url
+        label: "calamari.clients.download.url"
+        description: |
+          Calamari clients download URL
+        type: string
+        #default: http://download.ceph.com/calamari/1.3.1/ubuntu/trusty/pool/main/c/calamari-clients/calamari-clients_1.3.1.1-1trusty_all.deb
+        default: https://github.com/ksingh7/ceph-calamari-packages/raw/master/CentOS-el7/calamari-clients-1.2.2-32_g931ee58.el7.centos.x86_64.rpm
+      - name: diamond.download.url
+        label: "diamond.download.url"
+        description: |
+          Diamond download URL
+        type: string
+        #default: http://download.ceph.com/calamari/1.3.1/ubuntu/trusty/pool/main/d/diamond/diamond_3.4.67_all.deb
+        default: https://github.com/ksingh7/ceph-calamari-packages/raw/master/CentOS-el7/diamond-3.4.582-0.noarch.rpm
+      - name: calamari.user
+        label: "calamari.user"
+        description: |
+          The default calamari user
+        type: string
+        default: cloudsoft
+      - name: calamari.password
+        label: "calamari.password"
+        description: |
+          The default calamari password
+        type: string
+        default: pa55w0rd
+      - name: calamari.email
+        label: "calamari.email"
+        description: |
+          The default calamari email
+        type: string
+        default: test@cloudsoft.com
+
+      #provisioning.properties:
+      #  osFamily: ubuntu
+      #  osVersionRegex: 14
+      #  imageNameRegex:
+      
+      brooklyn.enrichers:
+        - type: org.apache.brooklyn.enricher.stock.Transformer
+          brooklyn.config:
+            uniqueTag: url-generator
+            enricher.sourceSensor: host.subnet.hostname
+            enricher.targetSensor: $brooklyn:sensor("org.apache.brooklyn.core.entity.Attributes", "main.uri")
+            enricher.targetValue:
+              $brooklyn:formatString:
+              - "%s:%s"
+              - $brooklyn:attributeWhenReady("host.address")
+              - $brooklyn:config("inkscope.port")
+        
+      brooklyn.config:
+        inkscope.restapi.port: 5000
+        inkscope.viz.port: 8080
+        inkscope.mongo.port: 27017
+        shell.env:
+          HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
+          RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
+          INKSCOPE_PORT: 80
+ #         CEPH_CLUSTER_NAME: $brooklyn:config("ceph.cluster.name")
+          CEPH_MON_FSID: $brooklyn:config("ceph.monitor.fsid")
+          CEPH_MON_HOSTNAMES: $brooklyn:config("ceph.monitor.hostnames")
+          CEPH_CLIENT_ADMIN_KEYRING: $brooklyn:config("ceph.client.admin.keyring")
+          INKSCOPE_HOST: $brooklyn:config("host.subnet.address")
+        customize.command: |
+          sudo mkdir -p /etc/ceph/
+          #sudo mkdir -p /opt/inkscope/etc/
+          sudo touch /etc/ceph/ceph.conf
+          #sudo touch /opt/inkscope/etc/inkscope.conf
+          sudo augtool-helper -l Ceph -f /etc/ceph/ceph.conf <<-EOF
+          set /files/etc/ceph/ceph.conf/gloabl/fsid ${CEPH_MON_FSID}
+          set /files/etc/ceph/ceph.conf/global/'mon initial members' ${CEPH_MON_HOSTNAMES}
+          set /files/etc/ceph/ceph.conf/global/'mon host' ${CEPH_MON_HOSTNAMES}
+          set /files/etc/ceph/ceph.conf/client.restapi/log_file /dev/null
+          set /files/etc/ceph/ceph.conf/client.restapi/keyring /etc/ceph/ceph.client.restapi.keyring
+          EOF
+          sudo touch /etc/ceph/ceph.client.admin.keyring
+          if [ -z "${CEPH_CLIENT_ADMIN_KEYRING}" ]; then
+            >&2 echo "Ceph client admin keyring not supplied but is required"
+            exit 1
+          else
+            echo "${CEPH_CLIENT_ADMIN_KEYRING}" | sudo tee -a /etc/ceph/ceph.client.admin.keyring
+          fi
+          
+          sudo tee /etc/yum.repos.d/mongodb-org.repo <<-EOF
+          [mongodb-org-3.4]
+          name=MongoDB Repository
+          baseurl=https://repo.mongodb.org/yum/redhat/7/mongodb-org/3.4/x86_64/
+          gpgcheck=1
+          enabled=1
+          gpgkey=https://www.mongodb.org/static/pgp/server-3.4.asc
+          EOF
+          
+          sudo yum install -y mongodb-org httpd
+          
+          # open it up on the internal network
+          sudo sed -i "s/bindIp: .*/bindIp: ${HOST_SUBNET_ADDRESS}/g" /etc/mongod.conf
+          sudo systemctl start mongod
+          
+          sudo yum -y install inkscope-cephrestapi.noarch inkscope-cephprobe.noarch inkscope-admviz 
+          
+          sudo ceph auth get-or-create client.restapi mds 'allow' osd 'allow *' mon 'allow *' | sudo tee -a /etc/ceph/ceph.client.restapi.keyring
+          
+          echo "Listen 8080" | sudo tee -a /etc/httpd/conf/httpd.conf
+          
+          sudo sed -i "s/<inkscope_host>/${HOST_SUBNET_ADDRESS}/g" /etc/httpd/conf.d/inkScope.conf
+          sudo sed -i "s/<inkscope_port>/${INKSCOPE_PORT}/g" /etc/httpd/conf.d/inkScope.conf
+          sudo sed -i "s/<ceph_rest_api_host>/${HOST_SUBNET_ADDRESS}/g" /etc/httpd/conf.d/inkScope.conf
+          
+          #sudo a2enmod proxy_http
+          #sudo a2enmod rewrite
+          #sudo a2ensite inkScope
+          
+          sudo pip install flask-login simple-json
+          
+        launch.command: |
+          sudo /etc/init.d/ceph-rest-api start &
+          sudo /etc/init.d/cephprobe start &
+          sudo systemctl start httpd
+          
+        checkRunning.command: |
+          echo true;

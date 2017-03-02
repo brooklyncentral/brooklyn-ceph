@@ -4,17 +4,27 @@ services:
   - type: ceph-monitor-cluster    
     id: test-monitor-cluster
     brooklyn.config:
-      cluster.initial.size: 3  
+      cluster.initial.size: 3
+      ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
   - type: 'ceph-osd-cluster'
     brooklyn.config:
       ceph.monitor.fsid: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
       ceph.client.admin.keyring: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
       ceph.monitor.hostnames: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
       ceph.cluster.name: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+      ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
   - type: 'ceph-mds-cluster'
     brooklyn.config:
       ceph.monitor.fsid: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
       ceph.client.admin.keyring: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
       ceph.monitor.hostnames: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
       ceph.cluster.name: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
-  - type: ceph-calamari-node
+      ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
+  - type: ceph-inkscope
+    id: inkscope
+    brooklyn.config:
+      ceph.monitor.fsid: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+      ceph.client.admin.keyring: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+      ceph.monitor.hostnames: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+      ceph.cluster.name: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+    
