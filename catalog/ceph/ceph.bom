@@ -39,13 +39,14 @@ brooklyn.catalog:
         type: boolean
         default: true
       brooklyn.config:
-        ceph.monitor.port: 6789
+        ceph.monitor.port: 5000
         shell.env:
           ENTITY_ID: $brooklyn:attributeWhenReady("entity.id")
           CEPH_RELEASE_NAME: $brooklyn:config("ceph.release.name")
           CEPH_RELEASE_VERSION: $brooklyn:config("ceph.release.version")
           CEPH_TARGET_DISTRO: el7
           INKSCOPE_HOST: $brooklyn:config("ceph.inkscope.host")
+          MONGODB_HOST: $brooklyn:config("ceph.mongodb.host")
         install.command: |
           sudo rpm --import 'https://download.ceph.com/keys/release.asc'
           sudo tee /etc/yum.repos.d/ceph.repo <<-EOF
@@ -75,7 +76,7 @@ brooklyn.catalog:
           EOF
 
           sudo yum update -y
-          sudo yum install -y epel-release augeas wget ntp snappy leveldb gdisk python-argparse gperftools-libs createrepo
+          sudo yum install -y epel-release augeas wget ntp snappy leveldb gdisk python-argparse gperftools-libs createrepo nano telnet python-ceph git
           sudo yum install -y ceph
           sudo usermod -a -G ceph ${USER}
           sudo usermod -aG wheel ceph
@@ -148,7 +149,7 @@ brooklyn.catalog:
           sudo yum install -y inkscope-sysprobe gcc python-devel python-pip
           sudo pip install psutil
           
-          sudo sed -i "s/mpongo_host/${INKSCOPE_HOST}/g" /opt/inkscope/etc/inkscope.conf
+          sudo sed -i "s/mpongo_host/${MONGODB_HOST}/g" /opt/inkscope/etc/inkscope.conf
           sudo sed -i "s/inkscope_host:inkscope_port/${INKSCOPE_HOST}:5000/g" /opt/inkscope/etc/inkscope.conf
           
         provisioning.properties:
@@ -366,7 +367,7 @@ brooklyn.catalog:
             echo "${CEPH_CLIENT_ADMIN_KEYRING}" | sudo tee -a /etc/ceph/ceph.client.admin.keyring
           fi
           sudo -u ceph ceph-authtool --create-keyring /tmp/ceph.mon.keyring --gen-key -n mon. --cap mon 'allow *'
-
+          
           sudo -u ceph ceph-authtool /tmp/ceph.mon.keyring --import-keyring /etc/ceph/ceph.client.admin.keyring
           
         post.customize.command: |
@@ -385,6 +386,7 @@ brooklyn.catalog:
         launch.command: |
           sudo /etc/init.d/sysprobe start &
           sudo systemctl start ceph-mon@${HOST_SUBNET_ADDRESS}
+          
         checkRunning.command: |
           set -e
           sudo systemctl status ceph-mon@${HOST_SUBNET_ADDRESS}
@@ -430,7 +432,7 @@ brooklyn.catalog:
           set /files/lib/systemd/system/ceph-mon@.service/Service/ExecStart/arguments/4 --public-addr 
           set /files/lib/systemd/system/ceph-mon@.service/Service/ExecStart/arguments/5 %i:6789
           EOF
-
+          
   - id: ceph-monitor-cluster
     name: "Ceph Monitor Cluster"
     itemType: entity

@@ -82,8 +82,8 @@ brooklyn.catalog:
         shell.env:
           HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
           RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
-          INKSCOPE_PORT: 80
- #         CEPH_CLUSTER_NAME: $brooklyn:config("ceph.cluster.name")
+          INKSCOPE_REST_PORT: $brooklyn:config("inkscope.restapi.port")
+          CEPH_CLUSTER_NAME: $brooklyn:config("ceph.cluster.name")
           CEPH_MON_FSID: $brooklyn:config("ceph.monitor.fsid")
           CEPH_MON_HOSTNAMES: $brooklyn:config("ceph.monitor.hostnames")
           CEPH_CLIENT_ADMIN_KEYRING: $brooklyn:config("ceph.client.admin.keyring")
@@ -108,40 +108,45 @@ brooklyn.catalog:
             echo "${CEPH_CLIENT_ADMIN_KEYRING}" | sudo tee -a /etc/ceph/ceph.client.admin.keyring
           fi
           
-          sudo tee /etc/yum.repos.d/mongodb-org.repo <<-EOF
-          [mongodb-org-3.4]
-          name=MongoDB Repository
-          baseurl=https://repo.mongodb.org/yum/redhat/7/mongodb-org/3.4/x86_64/
-          gpgcheck=1
-          enabled=1
-          gpgkey=https://www.mongodb.org/static/pgp/server-3.4.asc
-          EOF
-          
-          sudo yum install -y mongodb-org httpd
-          
-          # open it up on the internal network
-          sudo sed -i "s/bindIp: .*/bindIp: ${HOST_SUBNET_ADDRESS}/g" /etc/mongod.conf
-          sudo systemctl start mongod
-          
-          sudo yum -y install inkscope-cephrestapi.noarch inkscope-cephprobe.noarch inkscope-admviz 
-          
+          # Install the inkscope cephrestapi and cephprobe to collect ceph cluster information; it must be installed on only one machine running a Ceph node
+          sudo yum -y install inkscope-admviz httpd inkscope-cephrestapi.noarch inkscope-cephprobe.noarch
           sudo ceph auth get-or-create client.restapi mds 'allow' osd 'allow *' mon 'allow *' | sudo tee -a /etc/ceph/ceph.client.restapi.keyring
           
           echo "Listen 8080" | sudo tee -a /etc/httpd/conf/httpd.conf
           
+          # loaded by default
+          #echo "LoadModule proxy_module modules/mod_proxy.so" | sudo tee -a /etc/httpd/conf/httpd.conf
+          #echo "LoadModule proxy_balancer_module modules/mod_proxy_balancer.so" | sudo tee -a /etc/httpd/conf/httpd.conf
+          #echo "LoadModule proxy_http_module modules/mod_proxy_http.so" | sudo tee -a /etc/httpd/conf/httpd.conf
+          
+          # edit the http config
           sudo sed -i "s/<inkscope_host>/${HOST_SUBNET_ADDRESS}/g" /etc/httpd/conf.d/inkScope.conf
-          sudo sed -i "s/<inkscope_port>/${INKSCOPE_PORT}/g" /etc/httpd/conf.d/inkScope.conf
+          sudo sed -i "s/<inkscope_port>/${INKSCOPE_REST_PORT}/g" /etc/httpd/conf.d/inkScope.conf
           sudo sed -i "s/<ceph_rest_api_host>/${HOST_SUBNET_ADDRESS}/g" /etc/httpd/conf.d/inkScope.conf
+          
+          # do the swap here - http://inkscope.blogspot.co.uk/2015/03/inkscope-and-ceph-rest-api.html
+          sudo sed -i "s/ceph_rest_api\/api/api/g" /etc/httpd/conf.d/inkScope.conf
           
           #sudo a2enmod proxy_http
           #sudo a2enmod rewrite
           #sudo a2ensite inkScope
           
-          sudo pip install flask-login simple-json
+          sudo pip install simple-json
+          # doesn't work with later versions
+          sudo pip install Flask-Login==0.3.2
+          
+          # patch with eb5ddde5fb744cee905237cef32145467dbbe5ae
+          git clone https://github.com/inkscope/inkscope
+          cd inkscope
+          git checkout eb5ddde5fb744cee905237cef32145467dbbe5ae
+          sudo mv /var/www/inkscope/inkscopeViz /var/www/inkscope/inkscopeViz2
+          sudo cp -R inkscopeViz /var/www/inkscope/inkscopeViz
+          
+          sudo setenforce 0
           
         launch.command: |
-          sudo /etc/init.d/ceph-rest-api start &
-          sudo /etc/init.d/cephprobe start &
+          sudo /etc/init.d/ceph-rest-api start 2>&1 &
+          sudo /etc/init.d/cephprobe start 2>&1 &
           sudo systemctl start httpd
           
         checkRunning.command: |

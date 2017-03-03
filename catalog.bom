@@ -1,11 +1,15 @@
 name: Ceph
 location: gce-europe-centos7
+brooklyn.config:
+  ceph.sharedsecuritygroup.create: true
 services:
   - type: ceph-monitor-cluster    
     id: test-monitor-cluster
     brooklyn.config:
       cluster.initial.size: 3
       ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
+      ceph.mongodb.host: $brooklyn:component("sibling","mongodb").attributeWhenReady("host.subnet.address")
+      launch.latch: $brooklyn:component("sibling","mongodb").attributeWhenReady("service.isUp")
   - type: 'ceph-osd-cluster'
     brooklyn.config:
       ceph.monitor.fsid: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
@@ -13,6 +17,8 @@ services:
       ceph.monitor.hostnames: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
       ceph.cluster.name: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
       ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
+      ceph.mongodb.host: $brooklyn:component("sibling","mongodb").attributeWhenReady("host.subnet.address")
+      launch.latch: $brooklyn:component("sibling","mongodb").attributeWhenReady("service.isUp")
   - type: 'ceph-mds-cluster'
     brooklyn.config:
       ceph.monitor.fsid: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
@@ -20,6 +26,8 @@ services:
       ceph.monitor.hostnames: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
       ceph.cluster.name: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
       ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
+      ceph.mongodb.host: $brooklyn:component("sibling","mongodb").attributeWhenReady("host.subnet.address")
+      launch.latch: $brooklyn:component("sibling","mongodb").attributeWhenReady("service.isUp")
   - type: ceph-inkscope
     id: inkscope
     brooklyn.config:
@@ -27,4 +35,8 @@ services:
       ceph.client.admin.keyring: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
       ceph.monitor.hostnames: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
       ceph.cluster.name: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+      ceph.mongodb.host: $brooklyn:component("sibling","mongodb").attributeWhenReady("host.subnet.address")
+      launch.latch: $brooklyn:component("sibling","mongodb").attributeWhenReady("service.isUp")
+  - type: ceph-mongodb
+    id: mongodb
     

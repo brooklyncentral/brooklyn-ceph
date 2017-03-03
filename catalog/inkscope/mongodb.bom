@@ -1,0 +1,47 @@
+brooklyn.catalog:
+  version: "1.0.0-SNAPSHOT" # BROOKLYN_CEPH_VERSION
+  publish:
+    description: |
+      MongoDB for Ceph data
+    license_code: "APACHE-2.0"
+  items:
+  - id: ceph-mongodb
+    name: "Ceph MongoDB"
+    description: |
+      MongoDB for Ceph data
+    itemType: entity
+    iconUrl: "https://twitter.com/MongoDB/profile_image?size=original"
+    item:
+      type: centos7-software-process
+      name: "Ceph MongoDB"
+      brooklyn.config:
+        mongo.port: 27017
+        mongo.admin.port: 1234
+        shell.env:
+          INSTALL_DIR: $brooklyn:attributeWhenReady("install.dir")
+        install.command: |
+          sudo tee /etc/yum.repos.d/mongodb-org.repo <<-EOF
+          [mongodb-org-3.4]
+          name=MongoDB Repository
+          baseurl=https://repo.mongodb.org/yum/redhat/7/mongodb-org/3.4/x86_64/
+          gpgcheck=1
+          enabled=1
+          gpgkey=https://www.mongodb.org/static/pgp/server-3.4.asc
+          EOF
+          
+          sudo yum install -y mongodb-org git nodejs
+          
+          git clone https://github.com/mrvautin/adminMongo.git && cd adminMongo
+          npm install
+          
+          # open it up on the internal network
+          sudo sed -i "s/bindIp: .*/bindIp: ${HOST_SUBNET_ADDRESS}/g" /etc/mongod.conf
+        
+        launch.command: |
+          sudo systemctl start mongod
+          cd ${INSTALL_DIR}/adminMongo
+          npm start > output.log 2>&1 &
+          
+        checkRunning.command: |
+          sudo systemctl status mongod
+          
