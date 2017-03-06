@@ -7,6 +7,7 @@ brooklyn.catalog:
     license_code: "APACHE-2.0"
     defaults:
       cephIconUrl: &cephIconUrl "https://twitter.com/Ceph/profile_image?size=original"
+    
   items:
   - "https://raw.githubusercontent.com/brooklyncentral/common-catalog-utils/master/common/src/main/resources/common/common.bom"
   - id: ceph-node
@@ -160,7 +161,76 @@ brooklyn.catalog:
                 enabled: $brooklyn:config("ceph.sharedsecuritygroup.create")
                 tcpPortRanges:
                   - "6800-7300"
-
+        brooklyn.initializers: &cephCapacitySensors
+        - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
+          brooklyn.config:
+            name: ceph.capacity
+            period: 30s
+            description: |
+              TODO
+            targetType: integer
+            command: |
+              ceph status | grep avail | awk '{print $7$8}' | awk '/[0-9]$/{print $1;next};/[gG][bB]$/{printf "%u\n", $1*(1024*1024*1024);next};/[mM][bB]$/{printf "%u\n", $1*(1024*1024);next};/[kK][bB]$/{printf "%u\n", $1*1024;next}'
+        - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
+          brooklyn.config:
+            name: ceph.used
+            period: 30s
+            description: |
+              TODO
+            targetType: integer
+            command: |
+              ceph status | grep avail | awk '{print $1$2}' | awk '/[0-9]$/{print $1;next};/[gG][bB]$/{printf "%u\n", $1*(1024*1024*1024);next};/[mM][bB]$/{printf "%u\n", $1*(1024*1024);next};/[kK][bB]$/{printf "%u\n", $1*1024;next}'
+        - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
+          brooklyn.config:
+            name: ceph.available
+            period: 30s
+            description: |
+              TODO
+            targetType: integer
+            command: |
+              ceph status | grep avail | awk '{print $4$5}' | awk '/[0-9]$/{print $1;next};/[gG][bB]$/{printf "%u\n", $1*(1024*1024*1024);next};/[mM][bB]$/{printf "%u\n", $1*(1024*1024);next};/[kK][bB]$/{printf "%u\n", $1*1024;next}'
+        - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
+          brooklyn.config:
+            name: ceph.used.pc
+            period: 30s
+            description: |
+              TODO
+            targetType: double
+            command: |
+              calculatePercentage() { echo "scale=2; $2/($1/100)" | bc -l; }
+              CAPACITY=$(ceph status | grep avail | awk '{print $7$8}' | awk '/[0-9]$/{print $1;next};/[gG][bB]$/{printf "%u\n", $1*(1024*1024*1024);next};/[mM][bB]$/{printf "%u\n", $1*(1024*1024);next};/[kK][bB]$/{printf "%u\n", $1*1024;next}')
+              USED=$(ceph status | grep avail | awk '{print $1$2}' | awk '/[0-9]$/{print $1;next};/[gG][bB]$/{printf "%u\n", $1*(1024*1024*1024);next};/[mM][bB]$/{printf "%u\n", $1*(1024*1024);next};/[kK][bB]$/{printf "%u\n", $1*1024;next}')
+              calculatePercentage ${CAPACITY} ${USED}
+        
+        - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
+          brooklyn.config:
+            name: ceph.monitor.fsid
+            period: 30s
+            description: |
+              TODO
+            targetType: string
+            command: |
+              cat ${RUN_DIR}/ceph-monitor-fsid.txt || exit 1
+        - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
+          brooklyn.config:
+            name: ceph.client.admin.keyring
+            period: 30s
+            description: |
+              TODO
+            targetType: string
+            command: |
+              cat /etc/ceph/ceph.client.admin.keyring || exit 1
+        
+        brooklyn.enrichers: &cephCapacityEnrichers
+        - type: org.apache.brooklyn.policy.ha.ServiceFailureDetector 
+          brooklyn.config: 
+            entityFailed.stabilizationDelay: 30s 
+        
+        brooklyn.policies: &cephPolicies
+        - type: org.apache.brooklyn.policy.ha.ServiceRestarter
+          brooklyn.config:
+            failOnRecurringFailuresInThisDuration: 5m 
+       
   - id: ceph-client
     name: "Ceph Client"
     itemType: entity
@@ -243,6 +313,66 @@ brooklyn.catalog:
           sudo mkdir -p ${CEPH_MOUNTPOINT}
           sudo mount /dev/rbd/rbd/${CEPH_IMAGE_SPEC} ${CEPH_MOUNTPOINT}
 
+  - id: ceph-linux-mount
+    name: "Ceph Linux Mount"
+    itemType: entity
+    iconUrl: *cephIconUrl
+    item:
+      type: ceph-node
+      name: "Ceph Linux Mount"
+      brooklyn.parameters:
+      - name: ceph.mount.point
+        label: "ceph.mount.point"
+        description: |
+          Ceph mount point 
+        type: string
+        default: /mnt/ceph
+      - name: ceph.block.device.name
+        label: "ceph.block.device.name"
+        description: |
+          The block device name
+        type: string
+        default: ceph-vol
+      - name: ceph.filesystem.data.name
+        label: "ceph.filesystem.data.name"
+        description: |
+          The filesystem name
+        type: string
+        default: cephfs_data
+        
+      brooklyn.config:
+        start.latch: $brooklyn:config("root.entity").attributeWhenReady("service.isUp")
+        shell.env:
+          HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
+          RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
+          CEPH_CLUSTER_NAME: $brooklyn:config("ceph.cluster.name")
+          CEPH_MON_HOSTNAMES: $brooklyn:config("ceph.monitor.hostnames")
+          CEPH_MON_PRIMARY_HOSTNAME: $brooklyn:attributeWhenReady("host.subnet.address")
+          CEPH_MON_FSID: $brooklyn:config("ceph.monitor.fsid")
+          CEPH_CLIENT_ADMIN_KEYRING: $brooklyn:config("ceph.client.admin.keyring")
+        
+          CEPH_MOUNT_POINT: $brooklyn:config("ceph.mount.point")
+          CEPH_FILESYSTEM_DATA_NAME: $brooklyn:config("ceph.filesystem.data.name")
+          CEPH_BLOCK_DEVICE_NAME: $brooklyn:config("ceph.block.device.name")
+        customize.command: |
+          
+          CEPH_MOUNT_POINT=/mnt/ceph
+          CEPH_BLOCK_DEVICE_NAME=ceph-vol
+          CEPH_FILESYSTEM_DATA_NAME=cephfs_data
+          
+          sudo mkdir -p ${CEPH_MOUNT_POINT}
+          sudo rbd map ${CEPH_BLOCK_DEVICE_NAME} --pool ${CEPH_FILESYSTEM_DATA_NAME}
+          
+        launch.command: |
+          sudo mount /dev/rbd/${CEPH_FILESYSTEM_DATA_NAME}/${CEPH_BLOCK_DEVICE_NAME} ${CEPH_MOUNT_POINT}
+          
+        stop.command: |
+          sudo umount ${CEPH_MOUNT_POINT}
+          
+        checkRunning.command: |
+          echo true
+          
+          
   - id: ceph-configuration-manager
     name: "Ceph configuration manager"
     description: |
@@ -250,27 +380,81 @@ brooklyn.catalog:
     itemType: entity
     iconUrl: *cephIconUrl
     item:
+      name: "Ceph configuration manager"
+      brooklyn.parameters:
+      - name: ceph.osd.pool.size
+        label: "ceph.osd.pool.size"
+        description: |
+          Ceph OSD pool size
+        type: integer
+        default: 3
+      - name: ceph.replicates
+        label: "ceph.replicates"
+        description: |
+          Number of times data is replicated
+        type: integer
+        default: 3
+      - name: ceph.filesystem.data.name
+        label: "ceph.filesystem.data.name"
+        description: |
+          The filesystem name
+        type: string
+        default: cephfs_data
+      - name: ceph.filesystem.metadata.name
+        label: "ceph.filesystem.metadata.name"
+        description: |
+          The filesystem metadata name
+        type: string
+        default: cephfs_metadata
+      - name: ceph.filesystem.name
+        label: "ceph.filesystem.name"
+        description: |
+          The filesystem name
+        type: string
+        default: ceph
+      - name: ceph.block.device.name
+        label: "ceph.block.device.name"
+        description: |
+          The block device name
+        type: string
+        default: ceph-vol
+        
       type: child-software-process
       brooklyn.config:
-        start.latch: $brooklyn:parent().attributeWhenReady("service.isUp")
+        start.latch: $brooklyn:config("root.entity").attributeWhenReady("service.isUp")
         shell.env:
           CEPH_REPLICATES: $brooklyn:config("ceph.replicates")
           CEPH_OSD_POOLSIZE: $brooklyn:config("ceph.osd.pool.size")
           CEPH_FILESYSTEM_NAME: $brooklyn:config("ceph.filesystem.name")
           CEPH_FILESYSTEM_DATA_NAME: $brooklyn:config("ceph.filesystem.data.name")
           CEPH_FILESYSTEM_METADATA_NAME: $brooklyn:config("ceph.filesystem.metadata.name")
+          CEPH_BLOCK_DEVICE_NAME: $brooklyn:config("ceph.block.device.name")
         
-        launch.command: |
+        customize.command: |
           # see here: http://docs.ceph.com/docs/jewel/rados/operations/placement-groups/#choosing-the-number-of-placement-groups
-          calculatePG() { echo "y=($1*100)/$2; x=l(y)/l(2); scale=0; 2^((x+0.5)/1)" | bc -l; }
+          calculatePG() { echo "y=($1*100)/($2+3); x=l(y)/l(2); scale=0; 2^((x+0.5)/1)" | bc -l; }
           
           PLACEMENT_GROUPS=$(calculatePG ${CEPH_OSD_POOLSIZE} ${CEPH_REPLICATES})
           sudo -u ceph ceph osd pool create ${CEPH_FILESYSTEM_DATA_NAME} ${PLACEMENT_GROUPS}
           sudo -u ceph ceph osd pool create ${CEPH_FILESYSTEM_METADATA_NAME} ${PLACEMENT_GROUPS}
           sudo -u ceph ceph fs new ${CEPH_FILESYSTEM_NAME} ${CEPH_FILESYSTEM_METADATA_NAME} ${CEPH_FILESYSTEM_DATA_NAME}   
+        
+          # Create the block device for linux kernel only - http://tracker.ceph.com/issues/15448
+          sudo rbd create ${CEPH_BLOCK_DEVICE_NAME} --size 4096 --pool ${CEPH_FILESYSTEM_DATA_NAME} --image-feature layering
+          sudo rbd map ${CEPH_BLOCK_DEVICE_NAME} --pool ${CEPH_FILESYSTEM_DATA_NAME}
+          sudo mkfs.ext4 -m0 /dev/rbd/${CEPH_FILESYSTEM_DATA_NAME}/${CEPH_BLOCK_DEVICE_NAME}
+          
+          # if we want to mount it
+          #sudo mkdir -p /mnt/vol1
+          #sudo mount /dev/rbd/${CEPH_FILESYSTEM_DATA_NAME}/${CEPH_BLOCK_DEVICE_NAME} /mnt/vol1
+        
+        launch.command: |
+          echo true
+        checkRunning.command: |
+          echo true
 
-  - id: ceph-monitor-primary
-    name: "First Ceph Monitor Node"
+  - id: ceph-monitor-node
+    name: "Ceph Monitor Node"
     itemType: entity
     iconUrl: *cephIconUrl
     item:
@@ -328,7 +512,8 @@ brooklyn.catalog:
           Name of the ceph filesystem metadata store
         type: string
         default: cephfs_metadata
-      brooklyn.config:
+     
+      brooklyn.config: 
         shell.env:
           HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
           RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
@@ -366,58 +551,10 @@ brooklyn.catalog:
           else
             echo "${CEPH_CLIENT_ADMIN_KEYRING}" | sudo tee -a /etc/ceph/ceph.client.admin.keyring
           fi
-          sudo -u ceph ceph-authtool --create-keyring /tmp/ceph.mon.keyring --gen-key -n mon. --cap mon 'allow *'
+          sudo -u ceph ceph-authtool --create-keyring /tmp/ceph.mon.keyring --gen-key -n mon. --cap mon "allow *"
           
           sudo -u ceph ceph-authtool /tmp/ceph.mon.keyring --import-keyring /etc/ceph/ceph.client.admin.keyring
           
-        post.customize.command: |
-          sudo rm -f /tmp/monmap
-          for CEPH_MON_HOSTNAME in  $(echo "${CEPH_MON_HOSTNAMES}" | sed 's/,/ /g'); do
-            if [ ! -f /tmp/monmap ]; then
-              sudo -u ceph monmaptool --create --add ${CEPH_MON_HOSTNAME} ${CEPH_MON_HOSTNAME} --fsid $(cat ${RUN_DIR}/ceph-monitor-fsid.txt) /tmp/monmap
-            else
-              sudo -u ceph monmaptool --add ${CEPH_MON_HOSTNAME} ${CEPH_MON_HOSTNAME} --fsid $(cat ${RUN_DIR}/ceph-monitor-fsid.txt) /tmp/monmap
-            fi
-          done
-          sudo -u ceph mkdir -p /var/lib/ceph/mon/${CEPH_CLUSTER_NAME}-${HOST_SUBNET_ADDRESS}
-          sudo -u ceph ceph-mon --cluster ${CEPH_CLUSTER_NAME} --mkfs -i ${HOST_SUBNET_ADDRESS} --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
-          sudo -u ceph touch /var/lib/ceph/mon/${CEPH_CLUSTER_NAME}-${HOST_SUBNET_ADDRESS}/done
-          
-        launch.command: |
-          sudo /etc/init.d/sysprobe start &
-          sudo systemctl start ceph-mon@${HOST_SUBNET_ADDRESS}
-          
-        checkRunning.command: |
-          set -e
-          sudo systemctl status ceph-mon@${HOST_SUBNET_ADDRESS}
-          ceph mon stat | grep ${HOST_SUBNET_ADDRESS}
-
-      brooklyn.initializers:
-      - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
-        brooklyn.config:
-          name: ceph.monitor.fsid
-          description: |
-            TODO
-          targetType: string
-          command: |
-            cat ${RUN_DIR}/ceph-monitor-fsid.txt || exit 1
-      - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
-        brooklyn.config:
-          name: ceph.client.admin.keyring
-          description: |
-            TODO
-          targetType: string
-          command: |
-            cat /etc/ceph/ceph.client.admin.keyring || exit 1
-
-  - id: ceph-monitor-node
-    name: "Ceph Monitor Node"
-    itemType: entity
-    iconUrl: *cephIconUrl
-    item:
-      type: ceph-monitor-primary
-      name: "Ceph Monitor Node"
-      brooklyn.config:
         post.customize.command: |
           # see here for impl - http://docs.ceph.com/docs/master/rados/operations/add-or-rm-mons/
           ceph auth get mon. -o /tmp/temp-key
@@ -432,6 +569,47 @@ brooklyn.catalog:
           set /files/lib/systemd/system/ceph-mon@.service/Service/ExecStart/arguments/4 --public-addr 
           set /files/lib/systemd/system/ceph-mon@.service/Service/ExecStart/arguments/5 %i:6789
           EOF
+        launch.command: |
+          sudo /etc/init.d/sysprobe start &
+          sudo systemctl start ceph-mon@${HOST_SUBNET_ADDRESS}
+          
+        checkRunning.command: |
+          set -e
+          sudo systemctl status ceph-mon@${HOST_SUBNET_ADDRESS}
+          ceph mon stat | grep ${HOST_SUBNET_ADDRESS}
+          
+      brooklyn.initializers: *cephCapacitySensors
+      brooklyn.enrichers: *cephCapacityEnrichers
+      brooklyn.policies: *cephPolicies
+
+  - id: ceph-monitor-primary
+    name: "First Ceph Monitor Node"
+    itemType: entity
+    iconUrl: *cephIconUrl
+    item:
+      type: ceph-monitor-node
+      name: "Ceph Monitor Node"
+      brooklyn.config:
+        children.startable.mode: BACKGROUND          
+        post.customize.command: |
+          sudo rm -f /tmp/monmap
+          for CEPH_MON_HOSTNAME in  $(echo "${CEPH_MON_HOSTNAMES}" | sed 's/,/ /g'); do
+            if [ ! -f /tmp/monmap ]; then
+              sudo -u ceph monmaptool --create --add ${CEPH_MON_HOSTNAME} ${CEPH_MON_HOSTNAME} --fsid $(cat ${RUN_DIR}/ceph-monitor-fsid.txt) /tmp/monmap
+            else
+              sudo -u ceph monmaptool --add ${CEPH_MON_HOSTNAME} ${CEPH_MON_HOSTNAME} --fsid $(cat ${RUN_DIR}/ceph-monitor-fsid.txt) /tmp/monmap
+            fi
+          done
+          sudo -u ceph mkdir -p /var/lib/ceph/mon/${CEPH_CLUSTER_NAME}-${HOST_SUBNET_ADDRESS}
+          sudo -u ceph ceph-mon --cluster ${CEPH_CLUSTER_NAME} --mkfs -i ${HOST_SUBNET_ADDRESS} --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
+          sudo -u ceph touch /var/lib/ceph/mon/${CEPH_CLUSTER_NAME}-${HOST_SUBNET_ADDRESS}/done
+      
+      brooklyn.children:
+        - type: ceph-configuration-manager
+        
+      brooklyn.initializers: *cephCapacitySensors
+      brooklyn.enrichers: *cephCapacityEnrichers
+      brooklyn.policies: *cephPolicies
           
   - id: ceph-monitor-cluster
     name: "Ceph Monitor Cluster"
@@ -476,6 +654,8 @@ brooklyn.catalog:
             enricher.sourceSensor: $brooklyn:sensor("ceph.monitor.hostname.list")
             enricher.targetSensor: $brooklyn:sensor("ceph.monitor.hostnames")
             enricher.joiner.quote: false
+      brooklyn.policies:
+      - type: org.apache.brooklyn.policy.ha.ServiceReplacer
 
   - id: ceph-osd-node
     name: "Ceph OSD Node"
@@ -491,6 +671,7 @@ brooklyn.catalog:
           Ceph OSD weight
         type: double
         default: 1.0
+          
       brooklyn.config:
         shell.env:
           HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
@@ -566,6 +747,10 @@ brooklyn.catalog:
           sudo systemctl start ceph-osd@$(cat ${RUN_DIR}/ceph-osd-number.txt)
         checkRunning.command: |
           sudo systemctl status ceph-osd@$(cat ${RUN_DIR}/ceph-osd-number.txt)
+        
+      brooklyn.initializers: *cephCapacitySensors
+      brooklyn.enrichers: *cephCapacityEnrichers
+      brooklyn.policies: *cephPolicies
 
   - id: ceph-osd-cluster
     name: "Ceph OSD Cluster"
@@ -579,6 +764,25 @@ brooklyn.catalog:
         dynamiccluster.memberspec:
           $brooklyn:entitySpec:
             type: ceph-osd-node
+            
+      brooklyn.enrichers:
+      - type: org.apache.brooklyn.enricher.stock.Aggregator 
+        brooklyn.config: 
+          enricher.sourceSensor: $brooklyn:sensor("ceph.used.pc") 
+          enricher.targetSensor: $brooklyn:sensor("ceph.used.pc") 
+          enricher.aggregating.fromMembers: true 
+          transformation: average
+          
+      brooklyn.policies:
+      - type: org.apache.brooklyn.policy.ha.ServiceReplacer
+      - type: org.apache.brooklyn.policy.autoscaling.AutoScalerPolicy
+        brooklyn.config:
+          metric: ceph.used.percentage
+          metricUpperBound: 80
+          metricLowerBound: 10
+          resizeUpStabilizationDelay: 2s
+          resizeDownStabilizationDelay: 1m
+          maxPoolSize: 10
 
   - id: ceph-mds-node
     name: "Ceph MDS Node"
@@ -589,6 +793,7 @@ brooklyn.catalog:
       name: "Ceph MDS Node"
       description: |
        Ceph Metadata Service Node
+          
       brooklyn.config:
         shell.env:
           HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
@@ -625,6 +830,10 @@ brooklyn.catalog:
           sudo systemctl start ceph-mds@${HOST_SUBNET_ADDRESS}
         checkRunning.command: |
           sudo systemctl status ceph-mds@${HOST_SUBNET_ADDRESS}
+        
+      brooklyn.initializers: *cephCapacitySensors
+      brooklyn.enrichers: *cephCapacityEnrichers
+      brooklyn.policies: *cephPolicies
 
   - id: ceph-mds-cluster
     name: "Ceph MDS Cluster"
@@ -638,20 +847,55 @@ brooklyn.catalog:
         dynamiccluster.memberspec:
           $brooklyn:entitySpec:
             type: ceph-mds-node
+      
+      brooklyn.policies:
+      - type: org.apache.brooklyn.policy.ha.ServiceReplacer
 
   - id: ceph-template
     name: "Ceph"
     itemType: template
     iconUrl: *cephIconUrl
+    brooklyn.config:
+      ceph.sharedsecuritygroup.create: true
     item:
       services:
-      - type: ceph-monitor-cluster
-      - type: ceph-osd-cluster
+      - type: ceph-monitor-cluster    
+        id: test-monitor-cluster
         brooklyn.config:
-          ceph.monitor.fsid: $brooklyn:component("sibling","ceph-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
-          ceph.client.admin.keyring: $brooklyn:component("sibling","ceph-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
-          ceph.monitor.hostnames: $brooklyn:component("sibling","ceph-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")
-          ceph.cluster.name: $brooklyn:component("sibling","ceph-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+          cluster.initial.size: 3
+          ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
+          ceph.mongodb.host: $brooklyn:component("sibling","mongodb").attributeWhenReady("host.subnet.address")
+          launch.latch: $brooklyn:component("sibling","mongodb").attributeWhenReady("service.isUp")
+          root.entity: $brooklyn:parent()
+      - type: 'ceph-osd-cluster'
+        brooklyn.config:
+          ceph.monitor.fsid: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+          ceph.client.admin.keyring: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+          ceph.monitor.hostnames: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+          ceph.cluster.name: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+          ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
+          ceph.mongodb.host: $brooklyn:component("sibling","mongodb").attributeWhenReady("host.subnet.address")
+          launch.latch: $brooklyn:component("sibling","mongodb").attributeWhenReady("service.isUp")
+      - type: 'ceph-mds-cluster'
+        brooklyn.config:
+          ceph.monitor.fsid: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+          ceph.client.admin.keyring: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+          ceph.monitor.hostnames: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+          ceph.cluster.name: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+          ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
+          ceph.mongodb.host: $brooklyn:component("sibling","mongodb").attributeWhenReady("host.subnet.address")
+          launch.latch: $brooklyn:component("sibling","mongodb").attributeWhenReady("service.isUp")
+      - type: ceph-inkscope
+        id: inkscope
+        brooklyn.config:
+          ceph.monitor.fsid: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+          ceph.client.admin.keyring: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+          ceph.monitor.hostnames: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+          ceph.cluster.name: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+          ceph.mongodb.host: $brooklyn:component("sibling","mongodb").attributeWhenReady("host.subnet.address")
+          launch.latch: $brooklyn:component("sibling","mongodb").attributeWhenReady("service.isUp")
+      - type: ceph-mongodb
+        id: mongodb
     
   - id: ceph-client-template
     name: "Ceph Client"

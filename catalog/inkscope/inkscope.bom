@@ -132,10 +132,10 @@ brooklyn.catalog:
           #sudo a2ensite inkScope
           
           sudo pip install simple-json
-          # doesn't work with later versions
+          # doesn't work with later versions - https://github.com/inkscope/inkscope/issues/96
           sudo pip install Flask-Login==0.3.2
           
-          # patch with eb5ddde5fb744cee905237cef32145467dbbe5ae
+          # patch with eb5ddde5fb744cee905237cef32145467dbbe5ae - https://github.com/inkscope/inkscope/issues/83
           git clone https://github.com/inkscope/inkscope
           cd inkscope
           git checkout eb5ddde5fb744cee905237cef32145467dbbe5ae
