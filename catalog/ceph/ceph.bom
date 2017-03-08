@@ -77,7 +77,7 @@ brooklyn.catalog:
           EOF
 
           sudo yum update -y
-          sudo yum install -y epel-release augeas wget ntp snappy leveldb gdisk python-argparse gperftools-libs createrepo nano telnet python-ceph git
+          sudo yum install -y epel-release augeas wget ntp snappy leveldb gdisk python-argparse gperftools-libs createrepo nano telnet python-ceph git bc
           sudo yum install -y ceph
           sudo usermod -a -G ceph ${USER}
           sudo usermod -aG wheel ceph
@@ -168,7 +168,7 @@ brooklyn.catalog:
             period: 30s
             description: |
               TODO
-            targetType: integer
+            targetType: long
             command: |
               ceph status | grep avail | awk '{print $7$8}' | awk '/[0-9]$/{print $1;next};/[gG][bB]$/{printf "%u\n", $1*(1024*1024*1024);next};/[mM][bB]$/{printf "%u\n", $1*(1024*1024);next};/[kK][bB]$/{printf "%u\n", $1*1024;next}'
         - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
@@ -177,7 +177,7 @@ brooklyn.catalog:
             period: 30s
             description: |
               TODO
-            targetType: integer
+            targetType: long
             command: |
               ceph status | grep avail | awk '{print $1$2}' | awk '/[0-9]$/{print $1;next};/[gG][bB]$/{printf "%u\n", $1*(1024*1024*1024);next};/[mM][bB]$/{printf "%u\n", $1*(1024*1024);next};/[kK][bB]$/{printf "%u\n", $1*1024;next}'
         - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
@@ -186,7 +186,7 @@ brooklyn.catalog:
             period: 30s
             description: |
               TODO
-            targetType: integer
+            targetType: long
             command: |
               ceph status | grep avail | awk '{print $4$5}' | awk '/[0-9]$/{print $1;next};/[gG][bB]$/{printf "%u\n", $1*(1024*1024*1024);next};/[mM][bB]$/{printf "%u\n", $1*(1024*1024);next};/[kK][bB]$/{printf "%u\n", $1*1024;next}'
         - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
@@ -777,7 +777,7 @@ brooklyn.catalog:
       - type: org.apache.brooklyn.policy.ha.ServiceReplacer
       - type: org.apache.brooklyn.policy.autoscaling.AutoScalerPolicy
         brooklyn.config:
-          metric: ceph.used.percentage
+          metric: ceph.used.pc
           metricUpperBound: 80
           metricLowerBound: 10
           resizeUpStabilizationDelay: 2s
@@ -855,12 +855,19 @@ brooklyn.catalog:
     name: "Ceph"
     itemType: template
     iconUrl: *cephIconUrl
-    brooklyn.config:
-      ceph.sharedsecuritygroup.create: true
     item:
+      booklyn.config:
+        defaultDisplayName: Ceph
+      brooklyn.parameters:
+      - name: ceph.sharedsecuritygroup.create
+        label: "Create shared security group"
+        description: |
+          Creates a security group for Ceph to communicate on internally. Disable for clouds which do not support this.
+        type: boolean
+        default: true
       services:
       - type: ceph-monitor-cluster    
-        id: test-monitor-cluster
+        id: monitor-cluster
         brooklyn.config:
           cluster.initial.size: 3
           ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
@@ -869,29 +876,29 @@ brooklyn.catalog:
           root.entity: $brooklyn:parent()
       - type: 'ceph-osd-cluster'
         brooklyn.config:
-          ceph.monitor.fsid: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
-          ceph.client.admin.keyring: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
-          ceph.monitor.hostnames: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
-          ceph.cluster.name: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+          ceph.monitor.fsid: $brooklyn:component("sibling","monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+          ceph.client.admin.keyring: $brooklyn:component("sibling","monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+          ceph.monitor.hostnames: $brooklyn:component("sibling","monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+          ceph.cluster.name: $brooklyn:component("sibling","monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
           ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
           ceph.mongodb.host: $brooklyn:component("sibling","mongodb").attributeWhenReady("host.subnet.address")
           launch.latch: $brooklyn:component("sibling","mongodb").attributeWhenReady("service.isUp")
       - type: 'ceph-mds-cluster'
         brooklyn.config:
-          ceph.monitor.fsid: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
-          ceph.client.admin.keyring: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
-          ceph.monitor.hostnames: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
-          ceph.cluster.name: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+          ceph.monitor.fsid: $brooklyn:component("sibling","monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+          ceph.client.admin.keyring: $brooklyn:component("sibling","monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+          ceph.monitor.hostnames: $brooklyn:component("sibling","monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+          ceph.cluster.name: $brooklyn:component("sibling","monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
           ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
           ceph.mongodb.host: $brooklyn:component("sibling","mongodb").attributeWhenReady("host.subnet.address")
           launch.latch: $brooklyn:component("sibling","mongodb").attributeWhenReady("service.isUp")
       - type: ceph-inkscope
         id: inkscope
         brooklyn.config:
-          ceph.monitor.fsid: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
-          ceph.client.admin.keyring: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
-          ceph.monitor.hostnames: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
-          ceph.cluster.name: $brooklyn:component("sibling","test-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+          ceph.monitor.fsid: $brooklyn:component("sibling","monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+          ceph.client.admin.keyring: $brooklyn:component("sibling","monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+          ceph.monitor.hostnames: $brooklyn:component("sibling","monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+          ceph.cluster.name: $brooklyn:component("sibling","monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
           ceph.mongodb.host: $brooklyn:component("sibling","mongodb").attributeWhenReady("host.subnet.address")
           launch.latch: $brooklyn:component("sibling","mongodb").attributeWhenReady("service.isUp")
       - type: ceph-mongodb

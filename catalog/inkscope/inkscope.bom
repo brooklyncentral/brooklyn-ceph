@@ -4,15 +4,13 @@ brooklyn.catalog:
     description: |
       Ceph Inkscope is a management and monitoring service for Ceph.
     license_code: "APACHE-2.0"
-    defaults:
-      cephIconUrl: &cephIconUrl "https://twitter.com/Ceph/profile_image?size=original"
   items:
   - id: ceph-inkscope
     name: "Ceph Inkscope Node"
     description: |
       Ceph Inkscope is a management and monitoring service for Ceph.
     itemType: entity
-    iconUrl: "https://twitter.com/Ceph/profile_image?size=original"
+    iconUrl: "https://s3.amazonaws.com/drigodwin-misc/inkscope.png"
     item:
       type: ceph-node
       name: "Ceph Inkscope Node"
