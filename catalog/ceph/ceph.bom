@@ -1,3 +1,21 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
 brooklyn.catalog:
   version: "1.0.0-SNAPSHOT" # BROOKLYN_CEPH_VERSION
   publish:
@@ -151,6 +169,7 @@ brooklyn.catalog:
           sudo pip install psutil
           
           sudo sed -i "s/mpongo_host/${MONGODB_HOST}/g" /opt/inkscope/etc/inkscope.conf
+          sudo sed -i "s/\"platform\": \"/\"platform\": \"Powered by Apache Brooklyn/g" /opt/inkscope/etc/inkscope.conf
           sudo sed -i "s/inkscope_host:inkscope_port/${INKSCOPE_HOST}:5000/g" /opt/inkscope/etc/inkscope.conf
           
         provisioning.properties:
@@ -488,12 +507,6 @@ brooklyn.catalog:
           Number of times the data is replicated
         type: integer
         default: 3
-      - name: ceph.replicates
-        label: "ceph.replicates"
-        description: |
-          Number of times the data is replicated
-        type: integer
-        default: 3
       - name: ceph.filesystem.name
         label: "ceph.filesystem.name"
         description: |
@@ -616,11 +629,18 @@ brooklyn.catalog:
     itemType: entity
     iconUrl: *cephIconUrl
     item:
+      brooklyn.parameters:
+      - name: ceph.mon.pool.size
+        label: "ceph.mon.pool.size"
+        description: |
+          Ceph Monitor pool size
+        type: integer
+        default: 3
       type: cluster
       id: ceph-monitor-cluster
       name: "Ceph Monitor Cluster"
       brooklyn.config:
-        cluster.initial.size: 3
+        cluster.initial.size: $brooklyn:config("ceph.mon.pool.size")
         dynamiccluster.firstmemberspec:
           $brooklyn:entitySpec:
             type: ceph-monitor-primary
@@ -757,10 +777,17 @@ brooklyn.catalog:
     itemType: entity
     iconUrl: *cephIconUrl
     item:
+      brooklyn.parameters:
+      - name: ceph.osd.pool.size
+        label: "ceph.osd.pool.size"
+        description: |
+          Ceph OSD pool size
+        type: integer
+        default: 3
       type: cluster
       name: "Ceph OSD Cluster"
       brooklyn.config:
-        cluster.initial.size: 3
+        cluster.initial.size: $brooklyn:config("ceph.osd.pool.size")
         dynamiccluster.memberspec:
           $brooklyn:entitySpec:
             type: ceph-osd-node
@@ -783,6 +810,7 @@ brooklyn.catalog:
           resizeUpStabilizationDelay: 2s
           resizeDownStabilizationDelay: 1m
           maxPoolSize: 10
+      #- type: org.apache.brooklyn.policy.InvokeEffectorOnSensorChange
 
   - id: ceph-mds-node
     name: "Ceph MDS Node"
@@ -840,10 +868,17 @@ brooklyn.catalog:
     itemType: entity
     iconUrl: *cephIconUrl
     item:
+      brooklyn.parameters:
+      - name: ceph.mds.pool.size
+        label: "ceph.mds.pool.size"
+        description: |
+          Ceph MDS pool size
+        type: integer
+        default: 3
       type: cluster
       name: "Ceph MDS Cluster"
       brooklyn.config:
-        cluster.initial.size: 3
+        cluster.initial.size: $brooklyn:config("ceph.mds.pool.size")
         dynamiccluster.memberspec:
           $brooklyn:entitySpec:
             type: ceph-mds-node
@@ -852,10 +887,17 @@ brooklyn.catalog:
       - type: org.apache.brooklyn.policy.ha.ServiceReplacer
 
   - id: ceph-template
-    name: "Ceph"
+    version: "1.0.0-SNAPSHOT" # BROOKLYN_CEPH_VERSION
+    name: Ceph
     itemType: template
     iconUrl: *cephIconUrl
+    license: Apache-2.0
     item:
+      brooklyn.initializers:
+      - type: org.apache.brooklyn.core.sensor.StaticSensor
+        brooklyn.config:
+          name: main.uri
+          static.value: $brooklyn:component("inkscope").attributeWhenReady("main.uri")
       booklyn.config:
         defaultDisplayName: Ceph
       brooklyn.parameters:
@@ -865,11 +907,64 @@ brooklyn.catalog:
           Creates a security group for Ceph to communicate on internally. Disable for clouds which do not support this.
         type: boolean
         default: true
+      - name: ceph.osd.pool.size
+        label: "OSD Pool Size"
+        description: |
+          Ceph OSD pool size
+        type: integer
+        default: 3
+      - name: ceph.mon.pool.size
+        label: "Monitor Pool Size"
+        description: |
+          Ceph Monitor pool size
+        type: integer
+        default: 3
+      - name: ceph.mds.pool.size
+        label: "MDS Pool Size"
+        description: |
+          Ceph MDS pool size
+        type: integer
+        default: 3
+      - name: ceph.filesystem.data.name
+        label: "ceph.filesystem.data.name"
+        description: |
+          The filesystem name
+        type: string
+        default: cephfs_data
+      - name: ceph.filesystem.metadata.name
+        label: "ceph.filesystem.metadata.name"
+        description: |
+          The filesystem metadata name
+        type: string
+        default: cephfs_metadata
+      - name: ceph.filesystem.name
+        label: "ceph.filesystem.name"
+        description: |
+          The filesystem name
+        type: string
+        default: ceph
+      - name: ceph.block.device.name
+        label: "ceph.block.device.name"
+        description: |
+          The block device name
+        type: string
+        default: ceph-vol
+      - name: ceph.replicates
+        label: "ceph.replicates"
+        description: |
+          Number of times data is replicated
+        type: integer
+        default: 3
+      - name: ceph.replicates
+        label: "Ceph Data Replication"
+        description: |
+          Number of times data is replicated
+        type: integer
+        default: 3
       services:
       - type: ceph-monitor-cluster    
         id: monitor-cluster
         brooklyn.config:
-          cluster.initial.size: 3
           ceph.inkscope.host: $brooklyn:component("sibling","inkscope").attributeWhenReady("host.subnet.address")
           ceph.mongodb.host: $brooklyn:component("sibling","mongodb").attributeWhenReady("host.subnet.address")
           launch.latch: $brooklyn:component("sibling","mongodb").attributeWhenReady("service.isUp")

@@ -2,6 +2,11 @@ name: Ceph
 location: gce-europe-centos7 # rhel-london-vpn-centos
 brooklyn.config:
   ceph.sharedsecuritygroup.create: true
+brooklyn.initializers:
+- type: org.apache.brooklyn.core.sensor.StaticSensor
+  brooklyn.config:
+    name: main.uri
+    static.value: $brooklyn:component("inkscope").attributeWhenReady("main.uri")
 services:
   - type: ceph-monitor-cluster    
     id: test-monitor-cluster

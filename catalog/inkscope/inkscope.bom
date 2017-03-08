@@ -1,3 +1,21 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
 brooklyn.catalog:
   version: "1.0.0-SNAPSHOT" # BROOKLYN_CEPH_VERSION
   publish:
@@ -72,11 +90,27 @@ brooklyn.catalog:
               - "%s:%s"
               - $brooklyn:attributeWhenReady("host.address")
               - $brooklyn:config("inkscope.port")
-        
+      
+      brooklyn.initializers:
+      - type: org.apache.brooklyn.core.sensor.StaticSensor
+        brooklyn.config:
+          name: inkscope.restapi.port
+          static.value: $brooklyn:config("inkscope.restapi.port")
+      - type: org.apache.brooklyn.core.sensor.StaticSensor
+        brooklyn.config:
+          name: inkscope.port
+          static.value: $brooklyn:config("inkscope.viz.port")
+      brooklyn.enrichers:
+      - type: org.apache.brooklyn.enricher.stock.Transformer
+        brooklyn.config:
+          enricher.sourceSensor: $brooklyn:sensor("host.address")
+          enricher.targetSensor: $brooklyn:sensor("main.uri")
+          enricher.targetValue: $brooklyn:formatString("http://%s:%s", $brooklyn:attributeWhenReady("host.address"), $brooklyn:config("inkscope.viz.port"))
+      
       brooklyn.config:
         inkscope.restapi.port: 5000
         inkscope.viz.port: 8080
-        inkscope.mongo.port: 27017
+        
         shell.env:
           HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
           RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
