@@ -34,50 +34,18 @@ brooklyn.catalog:
       name: "Ceph Inkscope Node"
       
       brooklyn.parameters:
-      - name: calamari.server.download.url
-        label: "calamari.server.download.url"
+      - name: inkscape.user
+        label: "inkscape.user"
         description: |
-          Calamari server download URL
-        type: string
-        #default: http://download.ceph.com/calamari/1.3.1/ubuntu/trusty/pool/main/c/calamari/calamari-server_1.3.1.1-1trusty_amd64.deb
-        default: https://github.com/ksingh7/ceph-calamari-packages/raw/master/CentOS-el7/calamari-server-1.3.0.1-63_g11f74e4.el7.centos.x86_64.rpm
-      - name: calamari.clients.download.url
-        label: "calamari.clients.download.url"
-        description: |
-          Calamari clients download URL
-        type: string
-        #default: http://download.ceph.com/calamari/1.3.1/ubuntu/trusty/pool/main/c/calamari-clients/calamari-clients_1.3.1.1-1trusty_all.deb
-        default: https://github.com/ksingh7/ceph-calamari-packages/raw/master/CentOS-el7/calamari-clients-1.2.2-32_g931ee58.el7.centos.x86_64.rpm
-      - name: diamond.download.url
-        label: "diamond.download.url"
-        description: |
-          Diamond download URL
-        type: string
-        #default: http://download.ceph.com/calamari/1.3.1/ubuntu/trusty/pool/main/d/diamond/diamond_3.4.67_all.deb
-        default: https://github.com/ksingh7/ceph-calamari-packages/raw/master/CentOS-el7/diamond-3.4.582-0.noarch.rpm
-      - name: calamari.user
-        label: "calamari.user"
-        description: |
-          The default calamari user
+          The default inkscape user
         type: string
         default: cloudsoft
-      - name: calamari.password
-        label: "calamari.password"
+      - name: inkscape.password
+        label: "inkscape.password"
         description: |
-          The default calamari password
+          The default inkscape password
         type: string
         default: pa55w0rd
-      - name: calamari.email
-        label: "calamari.email"
-        description: |
-          The default calamari email
-        type: string
-        default: test@cloudsoft.com
-
-      #provisioning.properties:
-      #  osFamily: ubuntu
-      #  osVersionRegex: 14
-      #  imageNameRegex:
       
       brooklyn.enrichers:
         - type: org.apache.brooklyn.enricher.stock.Transformer

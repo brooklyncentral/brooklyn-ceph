@@ -375,9 +375,9 @@ brooklyn.catalog:
           CEPH_BLOCK_DEVICE_NAME: $brooklyn:config("ceph.block.device.name")
         customize.command: |
           
-          CEPH_MOUNT_POINT=/mnt/ceph
-          CEPH_BLOCK_DEVICE_NAME=ceph-vol
-          CEPH_FILESYSTEM_DATA_NAME=cephfs_data
+          #CEPH_MOUNT_POINT=/mnt/ceph
+          #CEPH_BLOCK_DEVICE_NAME=ceph-vol
+          #CEPH_FILESYSTEM_DATA_NAME=cephfs_data
           
           sudo mkdir -p ${CEPH_MOUNT_POINT}
           sudo rbd map ${CEPH_BLOCK_DEVICE_NAME} --pool ${CEPH_FILESYSTEM_DATA_NAME}
