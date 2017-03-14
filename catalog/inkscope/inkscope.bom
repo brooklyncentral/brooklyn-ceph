@@ -34,16 +34,16 @@ brooklyn.catalog:
       name: "Ceph Inkscope Node"
       
       brooklyn.parameters:
-      - name: inkscape.user
-        label: "inkscape.user"
+      - name: inkscope.user
+        label: "Inkscope user"
         description: |
-          The default inkscape user
+          The default Inkscope admin user
         type: string
         default: cloudsoft
-      - name: inkscape.password
-        label: "inkscape.password"
+      - name: inkscope.password
+        label: "Inkscope password"
         description: |
-          The default inkscape password
+          The default inkscope password
         type: string
         default: pa55w0rd
       

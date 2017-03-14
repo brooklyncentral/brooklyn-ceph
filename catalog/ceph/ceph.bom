@@ -40,19 +40,19 @@ brooklyn.catalog:
       type: centos7-software-process
       brooklyn.parameters: &cephNodeParams
       - name: ceph.release.name
-        label: "ceph.release.name"
+        label: "Ceph Release Name"
         description: |
           Ceph release name
         type: string
         default: jewel
       - name: ceph.release.version
-        label: "ceph.release.version"
+        label: "Ceph Release Version"
         description: |
           Ceph release version
         type: string
         default: "1-1"
       - name: ceph.sharedsecuritygroup.create
-        label: "ceph.sharedsecuritygroup.create"
+        label: "Create a shared security group"
         description: |
           Ceph shared security group
         type: boolean
@@ -259,12 +259,12 @@ brooklyn.catalog:
       name: "Ceph Client"
       brooklyn.parameters: &cephClientParameters
       - name: ceph.monitor.hostnames
-        label: "ceph.monitor.hostnames"
+        label: "Ceph monitor hostnames"
         description: |
           Ceph monitor hostnames (comma seperated)
         type: string
       - name: ceph.client.admin.keyring
-        label: "ceph.client.admin.keyring"
+        label: "Ceph admin keyring"
         description: |
           Ceph admin keyring
         type: string
@@ -280,19 +280,19 @@ brooklyn.catalog:
         type: string
         default: 4G
       - name: ceph.mountpoint
-        label: "ceph.mountpoint"
+        label: "Ceph OS mountpoint"
         description: |
           The location the Ceph filesystem is mounted
         type: string
         default: /mnt/ceph-block-device
       - name: ceph.filesystem.create
-        label: "ceph.filesystem.create"
+        label: "Create a file system"
         description: |
           Should Ceph create a new filesystem
         type: boolean
         default: false
       - name: ceph.filesystem.type
-        label: "ceph.filesystem.type"
+        label: "File system type"
         description: |
           The type of filesystem used by ceph
         type: string
@@ -340,26 +340,26 @@ brooklyn.catalog:
       name: "Ceph Linux Mount"
       brooklyn.parameters:
       - name: ceph.mount.point
-        label: "ceph.mount.point"
+        label: "Ceph OS mount point"
         description: |
           Ceph mount point 
         type: string
         default: /mnt/ceph
       - name: ceph.block.device.name
-        label: "ceph.block.device.name"
+        label: "Ceph block device volume name"
         description: |
           The block device name
         type: string
         default: ceph-vol
       - name: ceph.filesystem.data.name
-        label: "ceph.filesystem.data.name"
+        label: "Ceph filesystem data volume name"
         description: |
           The filesystem name
         type: string
         default: cephfs_data
         
       brooklyn.config:
-        start.latch: $brooklyn:config("root.entity").attributeWhenReady("service.isUp")
+        start.latch: $brooklyn:parent().parent().parent().attributeWhenReady("service.isUp")
         shell.env:
           HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
           RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
@@ -401,25 +401,25 @@ brooklyn.catalog:
       name: "Ceph configuration manager"
       brooklyn.parameters:
       - name: ceph.osd.pool.size
-        label: "ceph.osd.pool.size"
+        label: "Ceph OSD pool size"
         description: |
           Ceph OSD pool size
         type: integer
         default: 3
       - name: ceph.replicates
-        label: "ceph.replicates"
+        label: "Number of replicates"
         description: |
           Number of times data is replicated
         type: integer
         default: 3
       - name: ceph.filesystem.data.name
-        label: "ceph.filesystem.data.name"
+        label: "Ceph filesystem data volume name"
         description: |
           The filesystem name
         type: string
         default: cephfs_data
       - name: ceph.filesystem.metadata.name
-        label: "ceph.filesystem.metadata.name"
+        label: "Ceph filesystem meta data volume name"
         description: |
           The filesystem metadata name
         type: string
@@ -431,7 +431,7 @@ brooklyn.catalog:
         type: string
         default: ceph
       - name: ceph.block.device.name
-        label: "ceph.block.device.name"
+        label: "Ceph block device volume name"
         description: |
           The block device name
         type: string
@@ -439,7 +439,7 @@ brooklyn.catalog:
         
       type: child-software-process
       brooklyn.config:
-        start.latch: $brooklyn:config("root.entity").attributeWhenReady("service.isUp")
+        start.latch: $brooklyn:parent().attributeWhenReady("service.isUp")
         shell.env:
           CEPH_REPLICATES: $brooklyn:config("ceph.replicates")
           CEPH_OSD_POOLSIZE: $brooklyn:config("ceph.osd.pool.size")
@@ -480,46 +480,46 @@ brooklyn.catalog:
       name: "Ceph Monitor Node"
       brooklyn.parameters:
       - name: ceph.cluster.name
-        label: "ceph.cluster.name"
+        label: "Ceph cluster name"
         description: |
           Ceph monitor cluster name
         type: string
         default: ceph
       - name: ceph.monitor.hostnames
-        label: "ceph.monitor.hostnames"
+        label: "Ceph Monitor host names"
         description: |
           Ceph monitor hostnames (comma seperated)
         type: string
       - name: ceph.monitor.fsid
-        label: "ceph.monitor.fsid"
+        label: "Ceph FSID"
         description: |
           Ceph monitor fsid, unique filesystem identifier (UUID)
         type: string
       - name: ceph.client.admin.keyring
-        label: "ceph.client.admin.keyring"
+        label: "Ceph Admin keyring"
         description: |
           Ceph admin keyring
         type: string
       - name: ceph.replicates
-        label: "ceph.replicates"
+        label: "Number of replicates"
         description: |
           Number of times the data is replicated
         type: integer
         default: 3
       - name: ceph.filesystem.name
-        label: "ceph.filesystem.name"
+        label: "Ceph file system name"
         description: |
           Name of the ceph filesystem
         type: string
         default: cephfs
       - name: ceph.filesystem.data.name
-        label: "ceph.filesystem.data.name"
+        label: "Ceph filesystem data volume name"
         description: |
           Name of the ceph filesystem data store
         type: string
         default: cephfs_data
       - name: ceph.filesystem.metadata.name
-        label: "ceph.filesystem.metadata.name"
+        label: "Ceph filesystem meta data volume name"
         description: |
           Name of the ceph filesystem metadata store
         type: string
@@ -630,7 +630,7 @@ brooklyn.catalog:
     item:
       brooklyn.parameters:
       - name: ceph.mon.pool.size
-        label: "ceph.mon.pool.size"
+        label: "Ceph Monitor pool size"
         description: |
           Ceph Monitor pool size
         type: integer
@@ -685,7 +685,7 @@ brooklyn.catalog:
       name: "Ceph OSD Node"
       brooklyn.parameters:
       - name: ceph.osd.weight
-        label: "ceph.osd.weight"
+        label: "Ceph OSD weight"
         description: |
           Ceph OSD weight
         type: double
@@ -778,7 +778,7 @@ brooklyn.catalog:
     item:
       brooklyn.parameters:
       - name: ceph.osd.pool.size
-        label: "ceph.osd.pool.size"
+        label: "Ceph OSD pool size"
         description: |
           Ceph OSD pool size
         type: integer
@@ -869,7 +869,7 @@ brooklyn.catalog:
     item:
       brooklyn.parameters:
       - name: ceph.mds.pool.size
-        label: "ceph.mds.pool.size"
+        label: "Ceph MDS pool size"
         description: |
           Ceph MDS pool size
         type: integer
@@ -960,41 +960,52 @@ brooklyn.catalog:
           Number of times data is replicated
         type: integer
         default: 3
+      - name: inkscope.user
+        label: "Inkscope user"
+        description: |
+          The default Inkscope admin user
+        type: string
+        default: cloudsoft
+      - name: inkscope.password
+        label: "Inkscope password"
+        description: |
+          The default inkscope password
+        type: string
+        default: pa55w0rd
       services:
       - type: ceph-monitor-cluster    
         id: monitor-cluster
         brooklyn.config:
-          ceph.inkscope.host: $brooklyn:sibling("inkscope").attributeWhenReady("host.subnet.address")
-          ceph.mongodb.host: $brooklyn:sibling("mongodb").attributeWhenReady("host.subnet.address")
-          launch.latch: $brooklyn:sibling("mongodb").attributeWhenReady("service.isUp")
-          root.entity: $brooklyn:parent()
+          ceph.inkscope.host: $brooklyn:component("inkscope").attributeWhenReady("host.subnet.address")
+          ceph.mongodb.host: $brooklyn:component("mongodb").attributeWhenReady("host.subnet.address")
+          launch.latch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
       - type: 'ceph-osd-cluster'
         brooklyn.config:
-          ceph.monitor.fsid: $brooklyn:sibling("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
-          ceph.client.admin.keyring: $brooklyn:sibling("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
-          ceph.monitor.hostnames: $brooklyn:sibling("monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
-          ceph.cluster.name: $brooklyn:sibling("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
-          ceph.inkscope.host: $brooklyn:sibling("inkscope").attributeWhenReady("host.subnet.address")
-          ceph.mongodb.host: $brooklyn:sibling("mongodb").attributeWhenReady("host.subnet.address")
-          launch.latch: $brooklyn:sibling("mongodb").attributeWhenReady("service.isUp")
+          ceph.monitor.fsid: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+          ceph.client.admin.keyring: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+          ceph.monitor.hostnames: $brooklyn:component("monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+          ceph.cluster.name: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+          ceph.inkscope.host: $brooklyn:component("inkscope").attributeWhenReady("host.subnet.address")
+          ceph.mongodb.host: $brooklyn:component("mongodb").attributeWhenReady("host.subnet.address")
+          launch.latch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
       - type: 'ceph-mds-cluster'
         brooklyn.config:
-          ceph.monitor.fsid: $brooklyn:sibling("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
-          ceph.client.admin.keyring: $brooklyn:sibling("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
-          ceph.monitor.hostnames: $brooklyn:sibling("monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
-          ceph.cluster.name: $brooklyn:sibling("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
-          ceph.inkscope.host: $brooklyn:sibling("inkscope").attributeWhenReady("host.subnet.address")
-          ceph.mongodb.host: $brooklyn:sibling("mongodb").attributeWhenReady("host.subnet.address")
-          launch.latch: $brooklyn:sibling("mongodb").attributeWhenReady("service.isUp")
+          ceph.monitor.fsid: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+          ceph.client.admin.keyring: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+          ceph.monitor.hostnames: $brooklyn:component("monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+          ceph.cluster.name: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+          ceph.inkscope.host: $brooklyn:component("inkscope").attributeWhenReady("host.subnet.address")
+          ceph.mongodb.host: $brooklyn:component("mongodb").attributeWhenReady("host.subnet.address")
+          launch.latch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
       - type: ceph-inkscope
         id: inkscope
         brooklyn.config:
-          ceph.monitor.fsid: $brooklyn:sibling("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
-          ceph.client.admin.keyring: $brooklyn:sibling("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
-          ceph.monitor.hostnames: $brooklyn:sibling("monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
-          ceph.cluster.name: $brooklyn:sibling("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
-          ceph.mongodb.host: $brooklyn:sibling("mongodb").attributeWhenReady("host.subnet.address")
-          launch.latch: $brooklyn:sibling("mongodb").attributeWhenReady("service.isUp")
+          ceph.monitor.fsid: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+          ceph.client.admin.keyring: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+          ceph.monitor.hostnames: $brooklyn:component("monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+          ceph.cluster.name: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+          ceph.mongodb.host: $brooklyn:component("mongodb").attributeWhenReady("host.subnet.address")
+          launch.latch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
       - type: ceph-mongodb
         id: mongodb
     
