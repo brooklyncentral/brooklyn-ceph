@@ -783,6 +783,24 @@ brooklyn.catalog:
           Ceph OSD pool size
         type: integer
         default: 3
+      - name: ceph.maximum.usage
+        label: "Maximum disk usage"
+        description: |
+          The maximum usage before ceph scales up the cluster
+        type: integer
+        default: 80
+      - name: ceph.minimum.usage
+        label: "Minimum disk usage"
+        description: |
+          The minimum usage before ceph scales down the cluster
+        type: integer
+        default: 10
+      - name: ceph.maximum.osd
+        label: "Maximum OSD cluster size"
+        description: |
+          The maximum number of OSDs
+        type: integer
+        default: 10
       type: cluster
       name: "Ceph OSD Cluster"
       brooklyn.config:
@@ -804,11 +822,11 @@ brooklyn.catalog:
       - type: org.apache.brooklyn.policy.autoscaling.AutoScalerPolicy
         brooklyn.config:
           metric: ceph.used.pc
-          metricUpperBound: 80
-          metricLowerBound: 10
+          metricUpperBound: $brooklyn:config("ceph.maximum.usage")
+          metricLowerBound: $brooklyn:config("ceph.minimum.usage")
           resizeUpStabilizationDelay: 2s
           resizeDownStabilizationDelay: 1m
-          maxPoolSize: 10
+          maxPoolSize: $brooklyn:config("ceph.maximum.osd")
       #- type: org.apache.brooklyn.policy.InvokeEffectorOnSensorChange
 
   - id: ceph-mds-node
@@ -949,29 +967,29 @@ brooklyn.catalog:
         type: string
         default: ceph-vol
       - name: ceph.replicates
-        label: "ceph.replicates"
-        description: |
-          Number of times data is replicated
-        type: integer
-        default: 3
-      - name: ceph.replicates
         label: "Ceph Data Replication"
         description: |
           Number of times data is replicated
         type: integer
         default: 3
-      - name: inkscope.user
-        label: "Inkscope user"
+      - name: ceph.maximum.usage
+        label: "Maximum disk usage"
         description: |
-          The default Inkscope admin user
-        type: string
-        default: cloudsoft
-      - name: inkscope.password
-        label: "Inkscope password"
+          The maximum usage before ceph scales up the cluster
+        type: integer
+        default: 80
+      - name: ceph.minimum.usage
+        label: "Minimum disk usage"
         description: |
-          The default inkscope password
-        type: string
-        default: pa55w0rd
+          The minimum usage before ceph scales down the cluster
+        type: integer
+        default: 10
+      - name: ceph.maximum.osd
+        label: "Maximum OSD cluster size"
+        description: |
+          The maximum number of OSDs
+        type: integer
+        default: 10
       services:
       - type: ceph-monitor-cluster    
         id: monitor-cluster
