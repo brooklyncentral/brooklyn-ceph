@@ -1,11 +1,47 @@
---2017-02-22 11:28:28--  https://raw.githubusercontent.com/brooklyncentral/brooklyn-rethinkdb/master/resources/rethinkdb/augtool-helper.sh
-Resolving raw.githubusercontent.com... 151.101.16.133
-Connecting to raw.githubusercontent.com|151.101.16.133|:443... connected.
-HTTP request sent, awaiting response... 200 OK
-Length: 860 [text/plain]
-Saving to: ‘augtool-helper.sh’
+#!/usr/bin/env bash
 
-     0K                                                       100% 51.3M=0s
+AUGEAS_COMMANDS=()
 
-2017-02-22 11:28:28 (51.3 MB/s) - ‘augtool-helper.sh’ saved [860/860]
+function usage(){
+	cat <<EOF
 
+Usage: augtool-helper [options] [augeas commands]
+
+	-l| --lens		The augeas lens to use see http://augeas.net/stock_lenses.html eg Properties.lns
+	-f| --file		The file to configure eg /path/to/file.properties
+
+Example: augtool-helper -l Nginx -f /etc/nginx/conf.d/site.cnf "set /files/etc/nginx/conf.d/site.cnf/http/server/listen 80"
+EOF
+	exit 1
+}
+
+while [[ $# -gt 1 ]]; do
+	case $1 in
+		-l|--lens)
+			AUGEAS_LENS="$2"
+			shift
+		;;
+		-f|--file)
+			CONFIG_FILE="$2"
+			shift
+		;;
+		*)
+		;;
+	esac
+	shift
+done
+
+hash augtool 2>/dev/null || {
+	echo "=== Augeas not installed" >&2
+}
+
+if [ -z "${AUGEAS_LENS}" ]; then
+	echo "=== No Lens supplied" >&2;
+	usage
+fi
+if [ -z "${CONFIG_FILE}" ]; then
+	echo "=== No config file supplied" >&2;
+	usage
+fi
+
+augtool -Ast "${AUGEAS_LENS} incl ${CONFIG_FILE}"

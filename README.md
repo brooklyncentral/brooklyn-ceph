@@ -33,7 +33,7 @@ you would like to mount the Ceph storage and include config as below:
     - id: my-entity
       brooklyn.config:
         children.startable.mode: BACKGROUND
-         ...
+        ...
       brooklyn.children:
         - type: ceph-linux-mount
           brooklyn.config:
@@ -53,3 +53,11 @@ The Brooklyn Ceph deployment also includes [Inkscope](https://github.com/inkscop
 The admin interfaces to both Inkscope and MongoDB are displayed in the `main.uri` sensor of the `Ceph MongoDB` and `Ceph Inkscope Node`. Note that the default user created by
 Inkscope has the username and password `admin`. This should not be regarded as secure however and additional [auth](https://httpd.apache.org/docs/2.4/howto/auth.html) should be 
 configured through Apache web server. 
+
+## Future development
+
+The blueprint is currently fully functional but the following things probably require further input:  
+
+* Currently the blueprint doesn't scale down / end nodes properly
+* More automated tests are needed
+* More configuration should be pulled out into `brooklyn.parameters`
