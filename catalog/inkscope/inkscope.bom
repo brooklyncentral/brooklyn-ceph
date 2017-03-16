@@ -1,0 +1,142 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+brooklyn.catalog:
+  version: "1.0.0-SNAPSHOT" # BROOKLYN_CEPH_VERSION
+  publish:
+    description: |
+      Ceph Inkscope is a management and monitoring service for Ceph.
+    license_code: "APACHE-2.0"
+  items:
+  - id: ceph-inkscope
+    name: "Ceph Inkscope Node"
+    description: |
+      Ceph Inkscope is a management and monitoring service for Ceph.
+    itemType: entity
+    iconUrl: "https://s3.amazonaws.com/drigodwin-misc/inkscope.png"
+    item:
+      type: ceph-node
+      name: "Ceph Inkscope Node"
+      
+      brooklyn.parameters:
+      - name: inkscope.user
+        label: "Inkscope user"
+        description: |
+          The default Inkscope admin user
+        type: string
+        default: cloudsoft
+      - name: inkscope.password
+        label: "Inkscope password"
+        description: |
+          The default inkscope password
+        type: string
+        default: pa55w0rd
+      
+      brooklyn.enrichers:
+        - type: org.apache.brooklyn.enricher.stock.Transformer
+          brooklyn.config:
+            enricher.sourceSensor: $brooklyn:sensor("host.address")
+            enricher.targetSensor: $brooklyn:sensor("main.uri")
+            enricher.targetValue: $brooklyn:formatString("http://%s:%s", $brooklyn:attributeWhenReady("host.address"), $brooklyn:config("inkscope.viz.port"))
+      
+      brooklyn.initializers:
+      - type: org.apache.brooklyn.core.sensor.StaticSensor
+        brooklyn.config:
+          name: inkscope.restapi.port
+          static.value: $brooklyn:config("inkscope.restapi.port")
+      - type: org.apache.brooklyn.core.sensor.StaticSensor
+        brooklyn.config:
+          name: inkscope.port
+          static.value: $brooklyn:config("inkscope.viz.port")
+      
+      brooklyn.config:
+        inkscope.restapi.port: 5000
+        inkscope.viz.port: 8080
+        
+        shell.env:
+          HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
+          RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
+          INKSCOPE_REST_PORT: $brooklyn:config("inkscope.restapi.port")
+          CEPH_CLUSTER_NAME: $brooklyn:config("ceph.cluster.name")
+          CEPH_MON_FSID: $brooklyn:config("ceph.monitor.fsid")
+          CEPH_MON_HOSTNAMES: $brooklyn:config("ceph.monitor.hostnames")
+          CEPH_CLIENT_ADMIN_KEYRING: $brooklyn:config("ceph.client.admin.keyring")
+          INKSCOPE_HOST: $brooklyn:config("host.subnet.address")
+        customize.command: |
+          sudo mkdir -p /etc/ceph/
+          #sudo mkdir -p /opt/inkscope/etc/
+          sudo touch /etc/ceph/ceph.conf
+          #sudo touch /opt/inkscope/etc/inkscope.conf
+          sudo augtool-helper -l Ceph -f /etc/ceph/ceph.conf <<-EOF
+          set /files/etc/ceph/ceph.conf/gloabl/fsid ${CEPH_MON_FSID}
+          set /files/etc/ceph/ceph.conf/global/'mon initial members' ${CEPH_MON_HOSTNAMES}
+          set /files/etc/ceph/ceph.conf/global/'mon host' ${CEPH_MON_HOSTNAMES}
+          set /files/etc/ceph/ceph.conf/client.restapi/log_file /dev/null
+          set /files/etc/ceph/ceph.conf/client.restapi/keyring /etc/ceph/ceph.client.restapi.keyring
+          EOF
+          sudo touch /etc/ceph/ceph.client.admin.keyring
+          if [ -z "${CEPH_CLIENT_ADMIN_KEYRING}" ]; then
+            >&2 echo "Ceph client admin keyring not supplied but is required"
+            exit 1
+          else
+            echo "${CEPH_CLIENT_ADMIN_KEYRING}" | sudo tee -a /etc/ceph/ceph.client.admin.keyring
+          fi
+          
+          # Install the inkscope cephrestapi and cephprobe to collect ceph cluster information; it must be installed on only one machine running a Ceph node
+          sudo yum -y install inkscope-admviz httpd inkscope-cephrestapi.noarch inkscope-cephprobe.noarch
+          sudo ceph auth get-or-create client.restapi mds 'allow' osd 'allow *' mon 'allow *' | sudo tee -a /etc/ceph/ceph.client.restapi.keyring
+          
+          echo "Listen 8080" | sudo tee -a /etc/httpd/conf/httpd.conf
+          
+          # loaded by default
+          #echo "LoadModule proxy_module modules/mod_proxy.so" | sudo tee -a /etc/httpd/conf/httpd.conf
+          #echo "LoadModule proxy_balancer_module modules/mod_proxy_balancer.so" | sudo tee -a /etc/httpd/conf/httpd.conf
+          #echo "LoadModule proxy_http_module modules/mod_proxy_http.so" | sudo tee -a /etc/httpd/conf/httpd.conf
+          
+          # edit the http config
+          sudo sed -i "s/<inkscope_host>/${HOST_SUBNET_ADDRESS}/g" /etc/httpd/conf.d/inkScope.conf
+          sudo sed -i "s/<inkscope_port>/${INKSCOPE_REST_PORT}/g" /etc/httpd/conf.d/inkScope.conf
+          sudo sed -i "s/<ceph_rest_api_host>/${HOST_SUBNET_ADDRESS}/g" /etc/httpd/conf.d/inkScope.conf
+          
+          # do the swap here - http://inkscope.blogspot.co.uk/2015/03/inkscope-and-ceph-rest-api.html
+          sudo sed -i "s/ceph_rest_api\/api/api/g" /etc/httpd/conf.d/inkScope.conf
+          
+          #sudo a2enmod proxy_http
+          #sudo a2enmod rewrite
+          #sudo a2ensite inkScope
+          
+          sudo pip install simple-json
+          # doesn't work with later versions - https://github.com/inkscope/inkscope/issues/96
+          sudo pip install Flask-Login==0.3.2
+          
+          # patch with eb5ddde5fb744cee905237cef32145467dbbe5ae - https://github.com/inkscope/inkscope/issues/83
+          git clone https://github.com/inkscope/inkscope
+          cd inkscope
+          git checkout eb5ddde5fb744cee905237cef32145467dbbe5ae
+          sudo mv /var/www/inkscope/inkscopeViz /var/www/inkscope/inkscopeViz2
+          sudo cp -R inkscopeViz /var/www/inkscope/inkscopeViz
+          
+          sudo setenforce 0
+          
+        launch.command: |
+          sudo /etc/init.d/ceph-rest-api start 2>&1 &
+          sudo /etc/init.d/cephprobe start 2>&1 &
+          sudo systemctl start httpd
+          
+        checkRunning.command: |
+          echo true;

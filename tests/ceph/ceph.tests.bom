@@ -1,0 +1,125 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+brooklyn.catalog:
+  items:
+  - "https://raw.githubusercontent.com/brooklyncentral/common-catalog-utils/master/common-tests/src/main/resources/commontests/common.tests.bom"
+  - id: ceph-tests
+    version: "1.0.0-SNAPSHOT" # BROOKLYN_CEPH_VERSION
+    itemType: template
+    iconUrl: "https://twitter.com/Ceph/profile_image?size=original"
+    name: Ceph tests
+    description: Test that Ceph is running and operating correctly
+    license_code: Apache-2.0
+    license_url: http://www.apache.org/licenses/LICENSE-2.0.txt
+    item:
+      services:
+      - type: ceph-template
+        id: ceph
+      - type: centos7-software-process
+        id: ceph-mount-test-1
+        name: "Ceph Mount Test 1"
+        brooklyn.config:
+          children.startable.mode: BACKGROUND
+        brooklyn.children:
+          - type: ceph-linux-mount
+            id: ceph-linux-mount-1
+            brooklyn.config:
+              ceph.monitor.fsid: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+              ceph.client.admin.keyring: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+              ceph.monitor.hostnames: $brooklyn:component("monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+              ceph.cluster.name: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+        install.command: |
+          sudo yum update -y
+        launch.command: |
+          echo launch
+        checkRunning.command: |
+          echo true
+      - type: centos7-software-process
+        id: ceph-mount-test-2
+        name: "Ceph Mount Test 2"
+        brooklyn.config:
+          children.startable.mode: BACKGROUND
+        brooklyn.children:
+          - type: ceph-linux-mount
+            id: ceph-linux-mount-2
+            brooklyn.config:
+              ceph.monitor.fsid: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+              ceph.client.admin.keyring: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+              ceph.monitor.hostnames: $brooklyn:component("monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+              ceph.cluster.name: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+        install.command: |
+          sudo yum update -y
+        launch.command: |
+          echo launch
+        checkRunning.command: |
+          echo true
+      - type: test-case
+        name: Ceph Tests
+        brooklyn.config:
+          targetId: ceph
+          timeout: 1h
+        brooklyn.children:
+        - type: test-case
+          name: "1. Effector Restart, Stop & Restart Tests"
+          brooklyn.children:  
+          - type: assert-up-and-running-initial
+            name: "1.1 Node up and running"
+          - type: assert-up-and-running-initial
+            name: "1.2 Ceph Mount Test 1 up and running"
+            brooklyn.config:
+              targetId: ceph-linux-mount-1
+          - type: assert-up-and-running-initial
+            name: "1.3 Ceph Mount Test 2 up and running"
+            brooklyn.config:
+              targetId: ceph-linux-mount-2
+
+        - type: test-case
+          name: "2. Test Interfaces"
+          brooklyn.children:  
+          # HTTP Tests
+          - type: test-http-status-200
+            name: "2.1 Test Inkscope"
+            url: $brooklyn:component("ceph").attributeWhenReady("main.uri")
+          - type: test-http-status-200
+            name: "2.2 Test MongoDB"
+            url: $brooklyn:component("mongodb").attributeWhenReady("main.uri")
+            
+        - type: test-case
+          name: "3. Test Mount"
+          brooklyn.children: 
+          - type: test-ssh
+            name: "3.1 Check mount 1 can be written to"
+            brooklyn.config:
+              targetId: ceph-mount-test-1
+              command: echo "Test Content" | sudo tee -a /mnt/ceph/test.txt
+              assertStatus:
+                equals: 0
+          - type: test-ssh
+            name: "3.3 Check mount 2 can be read from"
+            brooklyn.config:
+              targetId: ceph-mount-test-2
+              command: |
+                # check the data gets there eventually
+                sleep 5
+                sudo mount -o remount /mnt/ceph
+                sudo cat /mnt/ceph/test.txt
+              assertOut:
+                equals: "Test Content"
+              assertStatus:
+                equals: 0
