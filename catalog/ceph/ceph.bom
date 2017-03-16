@@ -359,7 +359,7 @@ brooklyn.catalog:
         default: cephfs_data
         
       brooklyn.config:
-        start.latch: $brooklyn:parent().parent().parent().attributeWhenReady("service.isUp")
+        start.latch: $brooklyn:component("ceph").attributeWhenReady("service.isUp")
         shell.env:
           HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
           RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
@@ -373,6 +373,19 @@ brooklyn.catalog:
           CEPH_FILESYSTEM_DATA_NAME: $brooklyn:config("ceph.filesystem.data.name")
           CEPH_BLOCK_DEVICE_NAME: $brooklyn:config("ceph.block.device.name")
         customize.command: |
+          sudo touch /etc/ceph/ceph.conf
+          sudo augtool-helper -l Ceph -f /etc/ceph/ceph.conf <<-EOF
+          set /files/etc/ceph/ceph.conf/gloabl/fsid ${CEPH_MON_FSID}
+          set /files/etc/ceph/ceph.conf/global/'mon initial members' ${CEPH_MON_HOSTNAMES}
+          set /files/etc/ceph/ceph.conf/global/'mon host' ${CEPH_MON_HOSTNAMES}
+          EOF
+          sudo touch /etc/ceph/ceph.client.admin.keyring
+          if [ -z "${CEPH_CLIENT_ADMIN_KEYRING}" ]; then
+            >&2 echo "Ceph client admin keyring not supplied but is required"
+            exit 1
+          else
+            echo "${CEPH_CLIENT_ADMIN_KEYRING}" | sudo tee -a /etc/ceph/ceph.client.admin.keyring
+          fi
           
           #CEPH_MOUNT_POINT=/mnt/ceph
           #CEPH_BLOCK_DEVICE_NAME=ceph-vol
@@ -439,7 +452,7 @@ brooklyn.catalog:
         
       type: child-software-process
       brooklyn.config:
-        start.latch: $brooklyn:parent().attributeWhenReady("service.isUp")
+        start.latch: $brooklyn:parent().parent().attributeWhenReady("service.isUp")
         shell.env:
           CEPH_REPLICATES: $brooklyn:config("ceph.replicates")
           CEPH_OSD_POOLSIZE: $brooklyn:config("ceph.osd.pool.size")
