@@ -100,7 +100,7 @@ brooklyn.catalog:
           sudo usermod -a -G ceph ${USER}
           sudo usermod -aG wheel ceph
 
-          sudo wget https://raw.githubusercontent.com/brooklyncentral/brooklyn-rethinkdb/master/resources/rethinkdb/augtool-helper.sh -O /usr/sbin/augtool-helper
+          sudo wget https://raw.githubusercontent.com/brooklyncentral/brooklyn-ceph/master/resources/ceph/augtool-helper.sh -O /usr/sbin/augtool-helper
           sudo chmod 751 /usr/sbin/augtool-helper
           sudo tee /usr/share/augeas/lenses/dist/ceph.aug <<-EOF
           (* Ceph module for Augeas
