@@ -21,7 +21,7 @@ brooklyn.catalog:
   publish:
     description: |
       MongoDB for Ceph data
-    license_code: "APACHE-2.0"
+    license_code: Apache-2.0
   items:
   - id: ceph-mongodb
     name: "Ceph MongoDB"

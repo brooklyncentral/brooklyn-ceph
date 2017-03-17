@@ -21,7 +21,7 @@ brooklyn.catalog:
   publish:
     description: |
       Ceph Inkscope is a management and monitoring service for Ceph.
-    license_code: "APACHE-2.0"
+    license_code: Apache-2.0
   items:
   - id: ceph-inkscope
     name: "Ceph Inkscope Node"

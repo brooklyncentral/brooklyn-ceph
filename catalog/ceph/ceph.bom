@@ -22,7 +22,7 @@ brooklyn.catalog:
     description: |
       Ceph is a massively scalable, open source, distributed storage system.
       It is comprised of an object store, block store, and a distributed file system.
-    license_code: "APACHE-2.0"
+    license_code: Apache-2.0
     defaults:
       cephIconUrl: &cephIconUrl "https://twitter.com/Ceph/profile_image?size=original"
     
