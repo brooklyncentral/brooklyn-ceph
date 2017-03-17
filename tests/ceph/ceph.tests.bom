@@ -115,9 +115,6 @@ brooklyn.catalog:
             brooklyn.config:
               targetId: ceph-mount-test-2
               command: |
-                # check the data gets there eventually
-                sleep 5
-                sudo mount -o remount /mnt/ceph
                 sudo cat /mnt/ceph/test.txt
               assertOut:
                 equals: "Test Content"

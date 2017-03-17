@@ -239,6 +239,56 @@ brooklyn.catalog:
             targetType: string
             command: |
               cat /etc/ceph/ceph.client.admin.keyring || exit 1
+        - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
+          brooklyn.config:
+            name: Create RBD Image
+            description: |
+              Create a new block device image, note this does not support multiple mounts.
+            parameters:
+              filesystem:
+                description: |
+                  The filesystem to use on the new block device
+                defaultValue: ext4
+              name:
+                description: |
+                  The name of the block device
+                defaultValue: ceph-vol
+              size:
+                description: |
+                  The size of the block device in MB
+                defaultValue: 4096
+              cephDataVolume:
+                description: |
+                  The data volume pool to use
+                defaultValue: cephfs_data
+            command: |
+              # Create an rbd (block device) for linux kernel only - http://tracker.ceph.com/issues/15448
+              sudo rbd create ${name} --size ${size} --pool ${cephDataVolume} --image-feature layering
+              sudo rbd map ${name} --pool ${cephDataVolume}
+              sudo mkfs.${filesystem} /dev/rbd/${cephDataVolume}/${name}
+              
+        - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
+          brooklyn.config:
+            name: Mount RBD Image
+            description: |
+              Mount a RAIDOS block device image
+            parameters:
+              name:
+                description: |
+                  The name of the block device
+                defaultValue: ceph-vol
+              mountpoint:
+                description: |
+                  The name of the block device
+                defaultValue: /mnt/vol1
+              cephDataVolume:
+                description: |
+                  The data volume pool to use
+                defaultValue: cephfs_data
+            command: |
+              sudo mkdir -p ${mountpoint}
+              sudo rbd map ${name} --pool ${cephDataVolume}
+              sudo mount /dev/rbd/${cephDataVolume}/${name} ${mountpoint}
         
         brooklyn.enrichers: &cephCapacityEnrichers
         - type: org.apache.brooklyn.policy.ha.ServiceFailureDetector 
@@ -392,17 +442,18 @@ brooklyn.catalog:
           #CEPH_FILESYSTEM_DATA_NAME=cephfs_data
           
           sudo mkdir -p ${CEPH_MOUNT_POINT}
-          sudo rbd map ${CEPH_BLOCK_DEVICE_NAME} --pool ${CEPH_FILESYSTEM_DATA_NAME}
           
         launch.command: |
-          sudo mount /dev/rbd/${CEPH_FILESYSTEM_DATA_NAME}/${CEPH_BLOCK_DEVICE_NAME} ${CEPH_MOUNT_POINT}
+          # mount cephfs
+          sudo mount -t ceph ${CEPH_MON_HOSTNAMES}:/ ${CEPH_MOUNT_POINT} -o name=admin,secret=`ceph-authtool -p /etc/ceph/ceph.client.admin.keyring`
           
         stop.command: |
           sudo umount ${CEPH_MOUNT_POINT}
           
         checkRunning.command: |
           mount | grep ${CEPH_MOUNT_POINT}
-          
+       
+      brooklyn.initializers: *cephCapacitySensors   
           
   - id: ceph-configuration-manager
     name: "Ceph configuration manager"
@@ -470,15 +521,6 @@ brooklyn.catalog:
           sudo -u ceph ceph osd pool create ${CEPH_FILESYSTEM_METADATA_NAME} ${PLACEMENT_GROUPS}
           sudo -u ceph ceph fs new ${CEPH_FILESYSTEM_NAME} ${CEPH_FILESYSTEM_METADATA_NAME} ${CEPH_FILESYSTEM_DATA_NAME}   
         
-          # Create the block device for linux kernel only - http://tracker.ceph.com/issues/15448
-          sudo rbd create ${CEPH_BLOCK_DEVICE_NAME} --size 4096 --pool ${CEPH_FILESYSTEM_DATA_NAME} --image-feature layering
-          sudo rbd map ${CEPH_BLOCK_DEVICE_NAME} --pool ${CEPH_FILESYSTEM_DATA_NAME}
-          sudo mkfs.ext4 -m0 /dev/rbd/${CEPH_FILESYSTEM_DATA_NAME}/${CEPH_BLOCK_DEVICE_NAME}
-          
-          # if we want to mount it
-          #sudo mkdir -p /mnt/vol1
-          #sudo mount /dev/rbd/${CEPH_FILESYSTEM_DATA_NAME}/${CEPH_BLOCK_DEVICE_NAME} /mnt/vol1
-        
         launch.command: |
           echo true
         checkRunning.command: |
@@ -538,7 +580,7 @@ brooklyn.catalog:
         type: string
         default: cephfs_metadata
      
-      brooklyn.config: 
+      brooklyn.config:
         shell.env:
           HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
           RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
@@ -703,6 +745,12 @@ brooklyn.catalog:
           Ceph OSD weight
         type: double
         default: 1.0
+      - name: ceph.osd.device
+        label: "Ceph OSD device"
+        description: |
+          The device to use for ceph e.g. /dev/deviceN
+          leave blank to use the OS drive.
+        type: string
           
       brooklyn.config:
         shell.env:
@@ -710,7 +758,7 @@ brooklyn.catalog:
           RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
           CEPH_CLUSTER_NAME: $brooklyn:config("ceph.cluster.name")
           CEPH_OSD_WEIGHT: $brooklyn:config("ceph.osd.weight")
-#          CEPH_OSD_MOUNT_POINT: /dev/{hdd}
+          CEPH_OSD_MOUNT_POINT: $brooklyn:config("ceph.osd.device")
           CEPH_MON_FSID: $brooklyn:config("ceph.monitor.fsid")
           CEPH_MON_HOSTNAMES: $brooklyn:config("ceph.monitor.hostnames")
           CEPH_CLIENT_ADMIN_KEYRING: $brooklyn:config("ceph.client.admin.keyring")
@@ -1039,12 +1087,4 @@ brooklyn.catalog:
           launch.latch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
       - type: ceph-mongodb
         id: mongodb
-    
-  - id: ceph-client-template
-    name: "Ceph Client"
-    itemType: template
-    iconUrl: *cephIconUrl
-    item:
-      brooklyn.parameters: *cephClientParameters
-      services:
-      - type: ceph-client
+
