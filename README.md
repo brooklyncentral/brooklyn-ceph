@@ -37,10 +37,10 @@ you would like to mount the Ceph storage and include config as below:
       brooklyn.children:
         - type: ceph-linux-mount
           brooklyn.config:
-            ceph.monitor.fsid: $brooklyn:component("ceph-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
-	        ceph.client.admin.keyring: $brooklyn:component("ceph-monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
-	        ceph.monitor.hostnames: $brooklyn:component("ceph-monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
-	        ceph.cluster.name: $brooklyn:component("ceph-monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
+            ceph.monitor.fsid: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+	        ceph.client.admin.keyring: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+	        ceph.monitor.hostnames: $brooklyn:component("monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
+	        ceph.cluster.name: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
             
 This configures the `ceph-linux-mount` to have the correct admin keys and config required to connect to the Ceph cluster.
             
