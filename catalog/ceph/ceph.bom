@@ -59,6 +59,7 @@ brooklyn.catalog:
         default: true
       brooklyn.config:
         ceph.monitor.port: 5000
+        ceph.control.port: 6789
         shell.env:
           ENTITY_ID: $brooklyn:attributeWhenReady("entity.id")
           CEPH_RELEASE_NAME: $brooklyn:config("ceph.release.name")
@@ -1051,6 +1052,13 @@ brooklyn.catalog:
           The maximum number of OSDs
         type: integer
         default: 10
+      - name: ceph.osd.device
+        label: "Ceph OSD device"
+        description: |
+          The device to use for ceph e.g. /dev/deviceN
+          leave blank to use the OS drive.
+        type: string
+        pinned: false
       services:
       - type: ceph-monitor-cluster    
         id: monitor-cluster

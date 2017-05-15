@@ -22,6 +22,7 @@ The Ceph blueprint is set up to provide a basic scalable HA cluster by default. 
 | ceph.filesystem.metadata.name | Name of the metadata volume                           | cephfs_metadata |
 | ceph.filesystem.name          | Name of the filesystem                                | ceph            |
 | ceph.block.device.name        | Name of the block device                              | ceph-vol        |
+| ceph.osd.device               | The device to use for ceph e.g. /dev/deviceN          | null (use OS)   |
 
 ## Usage
 
