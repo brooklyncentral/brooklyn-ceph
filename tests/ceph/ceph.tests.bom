@@ -31,6 +31,9 @@ brooklyn.catalog:
       services:
       - type: ceph-template
         id: ceph
+        brooklyn.config:
+          # Some clouds give us very little free space
+          ceph.maximum.usage: 95
       - type: centos7-software-process
         id: ceph-mount-test-1
         name: "Ceph Mount Test 1"
