@@ -426,7 +426,7 @@ brooklyn.catalog:
         customize.command: |
           sudo touch /etc/ceph/ceph.conf
           sudo augtool-helper -l Ceph -f /etc/ceph/ceph.conf <<-EOF
-          set /files/etc/ceph/ceph.conf/gloabl/fsid ${CEPH_MON_FSID}
+          set /files/etc/ceph/ceph.conf/global/fsid ${CEPH_MON_FSID}
           set /files/etc/ceph/ceph.conf/global/'mon initial members' ${CEPH_MON_HOSTNAMES}
           set /files/etc/ceph/ceph.conf/global/'mon host' ${CEPH_MON_HOSTNAMES}
           EOF
@@ -598,7 +598,7 @@ brooklyn.catalog:
           echo "${CEPH_MON_FSID}" > ${RUN_DIR}/ceph-monitor-fsid.txt
           sudo touch /etc/ceph/ceph.conf
           sudo augtool-helper -l Ceph -f /etc/ceph/ceph.conf <<-EOF
-          set /files/etc/ceph/ceph.conf/gloabl/fsid ${CEPH_MON_FSID}
+          set /files/etc/ceph/ceph.conf/global/fsid ${CEPH_MON_FSID}
           set /files/etc/ceph/ceph.conf/mon/'mon initial members' ${CEPH_MON_PRIMARY_HOSTNAME}
           set /files/etc/ceph/ceph.conf/mon/'mon host' ${CEPH_MON_PRIMARY_HOSTNAME}
           set /files/etc/ceph/ceph.conf/mon/'mon addr' ${CEPH_MON_PRIMARY_HOSTNAME}
@@ -763,16 +763,23 @@ brooklyn.catalog:
           CEPH_MON_FSID: $brooklyn:config("ceph.monitor.fsid")
           CEPH_MON_HOSTNAMES: $brooklyn:config("ceph.monitor.hostnames")
           CEPH_CLIENT_ADMIN_KEYRING: $brooklyn:config("ceph.client.admin.keyring")
+          CEPH_ENABLE_EXT4: $brooklyn:config("ceph.enable.ext4")
 
         customize.command: |
           CEPH_OSD_UUID=$(uuidgen)
           echo "${CEPH_OSD_UUID}" > ${RUN_DIR}/ceph-osd-uuid.txt
           sudo touch /etc/ceph/ceph.conf
           sudo augtool-helper -l Ceph -f /etc/ceph/ceph.conf <<-EOF
-          set /files/etc/ceph/ceph.conf/gloabl/fsid ${CEPH_MON_FSID}
+          set /files/etc/ceph/ceph.conf/global/fsid ${CEPH_MON_FSID}
           set /files/etc/ceph/ceph.conf/global/'mon initial members' ${CEPH_MON_HOSTNAMES}
           set /files/etc/ceph/ceph.conf/global/'mon host' ${CEPH_MON_HOSTNAMES}
           EOF
+          if [ "${CEPH_ENABLE_EXT4}" = "true" ]; then
+            sudo augtool-helper -l Ceph -f /etc/ceph/ceph.conf <<-EOF
+            set /files/etc/ceph/ceph.conf/global/'osd max object name len' 256
+            set /files/etc/ceph/ceph.conf/global/'osd max object namespace len' 64
+          EOF
+          fi
           sudo touch /etc/ceph/ceph.client.admin.keyring
           if [ -z "${CEPH_CLIENT_ADMIN_KEYRING}" ]; then
             >&2 echo "Ceph client admin keyring not supplied but is required"
@@ -914,7 +921,7 @@ brooklyn.catalog:
           # make the ceph conf
           sudo touch /etc/ceph/ceph.conf
           sudo augtool-helper -l Ceph -f /etc/ceph/ceph.conf <<-EOF
-          set /files/etc/ceph/ceph.conf/gloabl/fsid ${CEPH_MON_FSID}
+          set /files/etc/ceph/ceph.conf/global/fsid ${CEPH_MON_FSID}
           set /files/etc/ceph/ceph.conf/global/'mon initial members' ${CEPH_MON_HOSTNAMES}
           set /files/etc/ceph/ceph.conf/global/'mon host' ${CEPH_MON_HOSTNAMES}
           set /files/etc/ceph/ceph.conf/mds.${HOST_SUBNET_ADDRESS}/host ${HOST_SUBNET_ADDRESS}
@@ -1052,6 +1059,12 @@ brooklyn.catalog:
           The maximum number of OSDs
         type: integer
         default: 10
+      - name: ceph.enable.ext4
+        label: "Enable ext4 disks"
+        description: |
+          Enables the max name length required for ext4 (not recommended)
+        type: boolean
+        default: false
       - name: ceph.osd.device
         label: "Ceph OSD device"
         description: |

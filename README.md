@@ -9,20 +9,21 @@ is both self-healing and self-managing, aiming to minimize administration time a
 
 The Ceph blueprint is set up to provide a basic scalable HA cluster by default. For information on the Ceph specific technical terms such as OSD, please consult the [Ceph glossary](http://docs.ceph.com/docs/jewel/glossary/).
 
-| Config Key                    | Description                                           | Default         |
-|-------------------------------|-------------------------------------------------------|-----------------|
-| ceph.osd.pool.size            | The initial number of OSD (storage) nodes             | 3               |
-| ceph.mon.pool.size            | The initial number of Monitor nodes                   | 3               |
-| ceph.mds.pool.size            | The initial number of Meta data nodes                 | 3               |
-| ceph.replicates               | Number of times Ceph replicates the data              | 3               |
-| ceph.maximum.usage            | The max (%) usage before ceph scales up the cluster   | 80              |
-| ceph.minimum.usage            | The min (%) usage before ceph scales down the cluster | 10              |
-| ceph.maximum.osd              | The total maximum number of OSDs                      | 10              |
-| ceph.filesystem.data.name     | Name of the data volume                               | cephfs_data     |
-| ceph.filesystem.metadata.name | Name of the metadata volume                           | cephfs_metadata |
-| ceph.filesystem.name          | Name of the filesystem                                | ceph            |
-| ceph.block.device.name        | Name of the block device                              | ceph-vol        |
-| ceph.osd.device               | The device to use for ceph e.g. /dev/deviceN          | null (use OS)   |
+| Config Key                    | Default         | Description                                           |
+|-------------------------------|-----------------|-------------------------------------------------------|
+| ceph.osd.pool.size            | 3               | The initial number of OSD (storage) nodes             |
+| ceph.mon.pool.size            | 3               | The initial number of Monitor nodes                   |
+| ceph.mds.pool.size            | 3               | The initial number of Meta data nodes                 |
+| ceph.replicates               | 3               | Number of times Ceph replicates the data              |
+| ceph.maximum.usage            | 80              | The max (%) usage before ceph scales up the cluster   |
+| ceph.minimum.usage            | 10              | The min (%) usage before ceph scales down the cluster |
+| ceph.maximum.osd              | 10              | The total maximum number of OSDs                      |
+| ceph.filesystem.data.name     | cephfs_data     | Name of the data volume                               |
+| ceph.filesystem.metadata.name | cephfs_metadata | Name of the metadata volume                           |
+| ceph.filesystem.name          | ceph            | Name of the filesystem                                |
+| ceph.block.device.name        | ceph-vol        | Name of the block device                              |
+| ceph.osd.device               | null (use OS)   | The device to use for ceph e.g. /dev/deviceN          |
+| ceph.enable.ext4              | false           | See: goo.gl/Qqthbt                                    |
 
 ## Usage
 
@@ -44,7 +45,8 @@ you would like to mount the Ceph storage and include config as below:
 	        ceph.cluster.name: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
             
 This configures the `ceph-linux-mount` to have the correct admin keys and config required to connect to the Ceph cluster.
-            
+
+NOTE: http://docs.ceph.com/docs/jewel/rados/configuration/filesystem-recommendations/
 
 ## Administrative Interfaces
 
