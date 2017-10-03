@@ -711,10 +711,10 @@ brooklyn.catalog:
             brooklyn.config:
               customize.latch: $brooklyn:parent().attributeWhenReady("cluster.first.entity").attributeWhenReady("service.isUp")
               shell.env:
-                CEPH_MON_PRIMARY_HOSTNAME: $brooklyn:attributeWhenReady("cluster.first.entity").attributeWhenReady("host.subnet.address")
-                CEPH_CLIENT_ADMIN_KEYRING: $brooklyn:attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
+                CEPH_MON_PRIMARY_HOSTNAME: $brooklyn:parent().attributeWhenReady("cluster.first.entity").attributeWhenReady("host.subnet.address")
+                CEPH_CLIENT_ADMIN_KEYRING: $brooklyn:parent().attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
                 CEPH_MON_HOSTNAMES: $brooklyn:parent().attributeWhenReady("ceph.monitor.hostnames")
-                CEPH_MON_FSID: $brooklyn:attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
+                CEPH_MON_FSID: $brooklyn:parent().attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
       brooklyn.enrichers:
         - type: org.apache.brooklyn.enricher.stock.Aggregator
           brooklyn.config:
