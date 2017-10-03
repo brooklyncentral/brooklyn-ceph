@@ -79,6 +79,7 @@ brooklyn.catalog:
           gpgkey=https://www.mongodb.org/static/pgp/server-3.4.asc
           EOF
           
+          sudo yum update -y
           sudo yum install -y mongodb-org git nodejs
           
           git clone https://github.com/mrvautin/adminMongo.git && cd adminMongo

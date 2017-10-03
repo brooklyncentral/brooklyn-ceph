@@ -23,7 +23,7 @@ The Ceph blueprint is set up to provide a basic scalable HA cluster by default. 
 | ceph.filesystem.name          | ceph            | Name of the filesystem                                |
 | ceph.block.device.name        | ceph-vol        | Name of the block device                              |
 | ceph.osd.device               | null (use OS)   | The device to use for ceph e.g. /dev/deviceN          |
-| ceph.enable.ext4              | false           | See: goo.gl/Qqthbt                                    |
+| ceph.enable.ext4              | false           | See: http://goo.gl/Qqthbt                             |
 
 ## Usage
 
