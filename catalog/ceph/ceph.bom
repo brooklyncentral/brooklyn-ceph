@@ -410,7 +410,7 @@ brooklyn.catalog:
         default: cephfs_data
         
       brooklyn.config:
-        start.latch: $brooklyn:component("ceph").attributeWhenReady("service.isUp")
+        latch.start: $brooklyn:component("ceph").attributeWhenReady("service.isUp")
         shell.env:
           HOST_SUBNET_ADDRESS: $brooklyn:attributeWhenReady("host.subnet.address")
           RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
@@ -504,7 +504,7 @@ brooklyn.catalog:
         
       type: child-software-process
       brooklyn.config:
-        start.latch: $brooklyn:parent().parent().attributeWhenReady("service.isUp")
+        latch.start: $brooklyn:parent().parent().attributeWhenReady("service.isUp")
         shell.env:
           CEPH_REPLICATES: $brooklyn:config("ceph.replicates")
           CEPH_OSD_POOLSIZE: $brooklyn:config("ceph.osd.pool.size")
@@ -709,7 +709,7 @@ brooklyn.catalog:
           $brooklyn:entitySpec:
             type: ceph-monitor-node
             brooklyn.config:
-              customize.latch: $brooklyn:parent().attributeWhenReady("cluster.first.entity").attributeWhenReady("service.isUp")
+              latch.customize: $brooklyn:parent().attributeWhenReady("cluster.first.entity").attributeWhenReady("service.isUp")
               shell.env:
                 CEPH_MON_PRIMARY_HOSTNAME: $brooklyn:parent().attributeWhenReady("cluster.first.entity").attributeWhenReady("host.subnet.address")
                 CEPH_CLIENT_ADMIN_KEYRING: $brooklyn:parent().attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.client.admin.keyring")
@@ -1078,7 +1078,7 @@ brooklyn.catalog:
         brooklyn.config:
           ceph.inkscope.host: $brooklyn:component("inkscope").attributeWhenReady("host.subnet.address")
           ceph.mongodb.host: $brooklyn:component("mongodb").attributeWhenReady("host.subnet.address")
-          launch.latch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
+          latch.launch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
       - type: 'ceph-osd-cluster'
         brooklyn.config:
           ceph.monitor.fsid: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
@@ -1087,7 +1087,7 @@ brooklyn.catalog:
           ceph.cluster.name: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
           ceph.inkscope.host: $brooklyn:component("inkscope").attributeWhenReady("host.subnet.address")
           ceph.mongodb.host: $brooklyn:component("mongodb").attributeWhenReady("host.subnet.address")
-          launch.latch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
+          latch.launch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
       - type: 'ceph-mds-cluster'
         brooklyn.config:
           ceph.monitor.fsid: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").attributeWhenReady("ceph.monitor.fsid")
@@ -1096,7 +1096,7 @@ brooklyn.catalog:
           ceph.cluster.name: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
           ceph.inkscope.host: $brooklyn:component("inkscope").attributeWhenReady("host.subnet.address")
           ceph.mongodb.host: $brooklyn:component("mongodb").attributeWhenReady("host.subnet.address")
-          launch.latch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
+          latch.launch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
       - type: ceph-inkscope
         id: inkscope
         brooklyn.config:
@@ -1105,7 +1105,7 @@ brooklyn.catalog:
           ceph.monitor.hostnames: $brooklyn:component("monitor-cluster").attributeWhenReady("ceph.monitor.hostnames")      
           ceph.cluster.name: $brooklyn:component("monitor-cluster").attributeWhenReady("cluster.first.entity").config("ceph.cluster.name")
           ceph.mongodb.host: $brooklyn:component("mongodb").attributeWhenReady("host.subnet.address")
-          launch.latch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
+          latch.launch: $brooklyn:component("mongodb").attributeWhenReady("service.isUp")
       - type: ceph-mongodb
         id: mongodb
 
