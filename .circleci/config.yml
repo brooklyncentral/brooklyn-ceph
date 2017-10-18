@@ -1,0 +1,84 @@
+# Base build parameters
+base_build: &base_build
+  working_directory: ~/repo
+  docker:
+    - image: circleci/openjdk:8-jdk
+  environment:
+    MAVEN_OPTS: -Xmx3200m
+
+# Base steps for maven project
+base_restore_cache: &base_restore_cache
+  restore_cache:
+    keys:
+      - v1-dependencies-{{ checksum "pom.xml" }}
+      # fallback to using the latest cache if no exact match is found
+      - v1-dependencies-
+
+base_save_cache: &base_save_cache
+  save_cache:
+    paths:
+      - ~/.m2
+    key: v1-dependencies-{{ checksum "pom.xml" }}
+
+# Jobs definitions
+version: 2
+jobs:
+  build:
+    <<: *base_build
+
+    steps:
+      - checkout
+      - *base_restore_cache
+      - run: mvn dependency:go-offline
+      - *base_save_cache
+      # run tests!
+      - run: mvn clean install
+
+  deploy:
+    <<: *base_build
+
+    steps:
+      - checkout
+      - *base_restore_cache
+      - run: mvn dependency:go-offline
+      - *base_save_cache
+      # Import key in GPG
+      - run: echo $GPG_SECRET_KEY | base64 --decode | $GPG_EXECUTABLE --batch --import
+      # Deploy to sonatype
+      - run: mvn source:jar javadoc:jar clean deploy -DskipTests -DdeployTo=sonatype --settings .circleci/settings.xml
+
+# Workflow definitions
+workflows:
+  version: 2
+  deploy_snapshot:
+    jobs:
+      - build
+      # If we are on master, we deploy directly to sonatype (as it contains only SNAPSHOT versions)
+      - deploy:
+          context: org-global
+          requires:
+            - build
+          filters:
+            branches:
+              only: master
+  deploy_release:
+    jobs:
+      - build:
+          filters:
+            branches:
+              only: /^release\/.*$/
+      # If we are in a release branch, we hold then deploy only upon manual validation
+      - hold:
+          type: approval
+          requires:
+            - build
+          filters:
+            branches:
+              only: /^release\/.*$/
+      - deploy:
+          context: org-global
+          requires:
+            - hold
+          filters:
+            branches:
+              only: /^release\/.*$/
