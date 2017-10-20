@@ -9,6 +9,20 @@
     <version>1.0.0-SNAPSHOT</version>
     <packaging>bundle</packaging>
 
+    <parent>
+        <groupId>io.brooklyn</groupId>
+        <artifactId>brooklyncentral-parent</artifactId>
+        <version>1.0.1</version>
+    </parent>
+
+    <name>Brooklyn :: Ceph</name>
+    <description>
+        Ceph is a unified, distributed storage system which implements object storage on a single distributed computer cluster,
+        and provides interfaces for object-, block- and file-level storage
+    </description>
+    <url>https://github.com/brooklyncentral/brooklyn-ceph</url>
+    <inceptionYear>2017</inceptionYear>
+
     <properties>
         <build-helper-maven-plugin.version>3.0.0</build-helper-maven-plugin.version>
         <maven-bundle-plugin.version>3.2.0</maven-bundle-plugin.version>
@@ -20,12 +34,21 @@
         <developerConnection>scm:git:git@github.com:brooklyncentral/brooklyn-ceph.git</developerConnection>
         <tag>HEAD</tag>
     </scm>
+
     <licenses>
         <license>
             <name>Apache 2.0</name>
             <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
         </license>
     </licenses>
+
+    <!-- For the full list of developers, see contributors to https://github.com/brooklyncentral/brooklyn-ceph -->
+    <developers>
+        <developer>
+            <name>Cloudsoft</name>
+            <organizationUrl>https://github.com/cloudsoft</organizationUrl>
+        </developer>
+    </developers>
 
     <build>
         <resources>
