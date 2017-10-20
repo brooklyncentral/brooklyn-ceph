@@ -12,7 +12,7 @@
     <parent>
         <groupId>io.brooklyn</groupId>
         <artifactId>brooklyncentral-parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.1</version>
     </parent>
 
     <name>Brooklyn :: Ceph</name>
@@ -45,8 +45,8 @@
     <!-- For the full list of developers, see contributors to https://github.com/brooklyncentral/brooklyn-ceph -->
     <developers>
         <developer>
-            <name>Thomas Bouron</name>
-            <organizationUrl>https://github.com/tbouron</organizationUrl>
+            <name>Cloudsoft</name>
+            <organizationUrl>https://github.com/cloudsoft</organizationUrl>
         </developer>
     </developers>
 
