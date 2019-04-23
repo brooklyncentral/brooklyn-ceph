@@ -99,9 +99,6 @@ brooklyn.catalog:
           - type: test-http-status-200
             name: "2.1 Test Inkscope"
             url: $brooklyn:component("ceph").attributeWhenReady("main.uri")
-          - type: test-http-status-200
-            name: "2.2 Test MongoDB"
-            url: $brooklyn:component("mongodb").attributeWhenReady("main.uri")
             
         - type: test-case
           name: "3. Test Mount"
